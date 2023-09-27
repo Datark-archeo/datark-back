@@ -16,17 +16,16 @@ async function  register(req, res) {
         return res.status(400).send({message : "Le mot de passe doit contenir au moins 8 caractères."});
     }
 
-    if(body.password != body.confirmPassword){
+    if(body.password !== body.confirmPassword){
         return res.status(400).send({message : "Les mots de passe ne correspondent pas."});
     }
 
     const salt = await bcrypt.genSalt(10);
-    const hash = await bcrypt.hash(body.password, salt);
-    body.password = hash;
+    body.password = await bcrypt.hash(body.password, salt);
 
     const newUser = await User.create({ firstname: body.firstname , surname : body.surname , lastname : body.lastname , email : body.email , password : body.password , confirmPassword : body.confirmPassword , country : body.country , city : body.city , birthday : body.birthday });
 
-    const jwtToken = jwt.sign({user: newUser}, process.env.JWT_KEY);
+    const jwtToken = jwt.sign({id: newUser.id}, process.env.TOKEN_SECRET);
     return res.status(200).send({message : "L'utilisateur a bien été créé.", token : jwtToken});
 }
 
@@ -47,8 +46,65 @@ async function login(req, res) {
     return res.status(400).send({message : "Le mot de passe est incorrect."});
     }
 
-    const jwtTokenoken = jwt.sign({ user : user }, process.env.TOKEN_SECRET);
+    const jwtToken = jwt.sign({ id : user.id }, process.env.TOKEN_SECRET);
     return res.status(200).send({message : "Vous êtes connecté", token : jwtToken});
-    
-    
+}
+
+async function editUser(req, res) {
+
+    let body = req.body
+
+    // if (!body.firstname !body.surname !body.lastname  !body.country !body.city !body.birthday ) {
+    //     return res.status(400).send({message : "Au moins un champ doit être rempli."});
+    // }
+
+    const jwtToken = req.header('auth-token');
+    const decoded = jwt.verify(jwtToken, process.env.TOKEN_SECRET);
+    const user = await User.findOne({ where : { id: decoded.id } });
+    if (user === null) {
+        return res.status(400).send({message : "Adresse email ou mot de passe incorrect."});
+    }
+
+    // Si l'utilisateur veut changer son email
+    if(body.newEmail) {
+        //if(body.newEmail === body.confirmEmail)
+        // ....
+    }
+
+    // Si l'utilisateur veut changer son mot de passe
+    if(body.newPassword) {
+        // if(!body.password === body.newPassword) {}
+        // if(body.newPassword !== body.confirmPassword) {}
+        // ....
+    }
+
+    // Si l'utilisateur veut changer son nom
+    if(body.firstname) {
+        user.firstname = body.firstname
+    }
+
+    // Si l'utilisateur veut changer son prénom
+    if(body.surname) {
+        //....
+    }
+
+    // Si l'utilisateur veut changer son pays
+    if(body.country) {
+        //....
+    }
+    // Si l'utilisateur veut changer sa ville
+    if(body.city) {
+        //....
+    }
+    // Si l'utilisateur veut changer sa date de naissance
+    if(body.birthday) {
+        //....
+    }
+
+    await user.save();
+    const token = jwt.sign({ id : user.id }, process.env.TOKEN_SECRET);
+    return res.status(200).send({message : "L'utilisateur a bien été modifié.", token : token});
+
+
+
 }
