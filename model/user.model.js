@@ -1,14 +1,11 @@
 const { Sequelize, DataTypes } = require("sequelize");
-const user = Sequelize.define("user", {
+const Subscribe = require("./subscribe.model");
+const File = require("./file.model");
+const User = Sequelize.define("user", {
     id: {
         type: DataTypes.INTEGER,
         autoIncrement : true,
         primaryKey : true,
-    },
-    id_suscribe : {
-        type: DataTypes.INTEGER,
-        model : Suscribe,
-        Key : id
     },
     firstname: {
       type: DataTypes.STRING,
@@ -38,5 +35,7 @@ const user = Sequelize.define("user", {
         allowNull: false
     },
  });
-
+User.hasOne(Subscribe)
+User.hasMany(File);
+module.exports = User;
  

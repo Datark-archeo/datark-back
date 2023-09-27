@@ -1,11 +1,11 @@
 const { Sequelize, DataTypes } = require("sequelize");
 const User = require("./user.model");
-const Subscribe = Sequelize.define("subscribe", {
+const File = Sequelize.define("file", {
     id: {
         type: DataTypes.INTEGER,
         autoIncrement : true,
         primaryKey : true,
-    
+
     },
     name: {
         type: DataTypes.STRING,
@@ -15,12 +15,17 @@ const Subscribe = Sequelize.define("subscribe", {
         type: DataTypes.STRING,
         allowNull: false
     },
-    price: {
-        type: DataTypes.FLOAT,
+    date_upload: {
+        type: DataTypes.DATE,
         allowNull: false
-      },
-      
-})
-Subscribe.hasMany(User);
+    },
+    date_creation: {
+        type: DataTypes.DATE,
+        allowNull: false
+    },
 
-module.exports = Subscribe;
+})
+
+File.hasOne(User)
+
+module.exports = File;
