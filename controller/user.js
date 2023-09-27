@@ -54,10 +54,10 @@ async function editUser(req, res) {
 
     let body = req.body
 
-    // if (!body.firstname !body.surname !body.lastname  !body.country !body.city !body.birthday ) {
-    //     return res.status(400).send({message : "Au moins un champ doit être rempli."});
-    // }
-
+     if (!body.firstname || !body.surname || !body.lastname || !body.country || !body.city || !body.birthday ) {
+         return res.status(400).send({message : "Au moins un champ doit être rempli."});
+     
+     }
     const jwtToken = req.header('auth-token');
     const decoded = jwt.verify(jwtToken, process.env.TOKEN_SECRET);
     const user = await User.findOne({ where : { id: decoded.id } });
@@ -67,38 +67,43 @@ async function editUser(req, res) {
 
     // Si l'utilisateur veut changer son email
     if(body.newEmail) {
-        //if(body.newEmail === body.confirmEmail)
-        // ....
+        if(body.newEmail !== body.confirmEmail){
+            return res.status(400).send({message : "Les adresses email ne correspondent pas."});
+        }
+        user.email = body.newEmail;
     }
-
+    
     // Si l'utilisateur veut changer son mot de passe
     if(body.newPassword) {
-        // if(!body.password === body.newPassword) {}
-        // if(body.newPassword !== body.confirmPassword) {}
-        // ....
+        if(body.newPassword !== body.confirmPassword){
+            return res.status(400).send({message : "Les mots de passe ne correspondent pas."});
+        }
+        const salt = await bcrypt.genSalt(10);
+        user.password = await bcrypt.hash(body.newPassword, salt);
     }
 
     // Si l'utilisateur veut changer son nom
     if(body.firstname) {
-        user.firstname = body.firstname
+        user.firstname = body.firstname;
+
     }
 
     // Si l'utilisateur veut changer son prénom
     if(body.surname) {
-        //....
+        user.surname = body.surname;
     }
 
     // Si l'utilisateur veut changer son pays
     if(body.country) {
-        //....
+        user.country = body.country;
     }
     // Si l'utilisateur veut changer sa ville
     if(body.city) {
-        //....
+        user.city = body.city;
     }
     // Si l'utilisateur veut changer sa date de naissance
     if(body.birthday) {
-        //....
+        user.birthday = body.birthday;
     }
 
     await user.save();
