@@ -1,5 +1,5 @@
 const { Sequelize, DataTypes } = require("sequelize");
-const subscribe = sequelize.define("subscribe", {
+const subscribe = Sequelize.define("subscribe", {
     id: {
         type: DataTypes.INTEGER,
         autoIncrement : true,
