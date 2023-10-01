@@ -1,6 +1,6 @@
-const { Sequelize, DataTypes } = require("sequelize");
-const User = require("./user.model");
-const Subscribe = Sequelize.define("subscribe", {
+const { DataTypes } = require("sequelize");
+const sequelize = require("../utils/sequelize");
+const Subscribe = sequelize.define("subscribe", {
     id: {
         type: DataTypes.INTEGER,
         autoIncrement : true,
@@ -21,6 +21,5 @@ const Subscribe = Sequelize.define("subscribe", {
       },
       
 })
-Subscribe.hasMany(User);
 
 module.exports = Subscribe;

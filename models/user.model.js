@@ -1,12 +1,6 @@
-const { Sequelize, DataTypes } = require("sequelize");
-const Subscribe = require("./subscribe.model");
-const File = require("./file.model");
-const User = Sequelize.define("user", {
-    id: {
-        type: DataTypes.INTEGER,
-        autoIncrement : true,
-        primaryKey : true,
-    },
+const { DataTypes } = require("sequelize");
+const sequelize = require("../utils/sequelize");
+const User = sequelize.define("user", {
     firstname: {
       type: DataTypes.STRING,
       allowNull: false
@@ -17,6 +11,8 @@ const User = Sequelize.define("user", {
     },
     email: {
       type: DataTypes.STRING,
+        allowNull: false,
+        unique: true
     },
     password: {
       type: DataTypes.STRING,
@@ -31,11 +27,25 @@ const User = Sequelize.define("user", {
         allowNull: false
     },
     birthday: {
-        type: DataTypes.DATE,
+        type: DataTypes.DATEONLY,
         allowNull: false
     },
+    email_verified: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false
+    },
+    verification_token: {
+        type: DataTypes.STRING,
+        allowNull: true
+    },
+    expire_token: {
+        type: DataTypes.DATEONLY,
+        allowNull: true
+    },
  });
-User.hasOne(Subscribe)
-User.hasMany(File);
+
+
+
 module.exports = User;
  

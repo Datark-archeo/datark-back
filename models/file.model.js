@@ -1,6 +1,6 @@
-const { Sequelize, DataTypes } = require("sequelize");
-const User = require("./user.model");
-const File = Sequelize.define("file", {
+const { DataTypes } = require("sequelize");
+const sequelize = require("../utils/sequelize");
+const File = sequelize.define("file", {
     id: {
         type: DataTypes.INTEGER,
         autoIncrement : true,
@@ -15,12 +15,8 @@ const File = Sequelize.define("file", {
         type: DataTypes.STRING,
         allowNull: false
     },
-    date_upload: {
-        type: DataTypes.DATE,
-        allowNull: false
-    },
-    date_creation: {
-        type: DataTypes.DATE,
+    date_publication: {
+        type: DataTypes.DATEONLY,
         allowNull: false
     },
     file_name: {
@@ -28,7 +24,5 @@ const File = Sequelize.define("file", {
         allowNull: false
     }
 })
-
-File.hasOne(User)
 
 module.exports = File;
