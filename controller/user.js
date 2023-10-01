@@ -50,7 +50,7 @@ async function login(req, res) {
     return res.status(200).send({message : "Vous êtes connecté", token : jwtToken});
 }
 
-async function editUser(req, res) {
+async function edit(req, res) {
 
     let body = req.body
 
@@ -113,3 +113,24 @@ async function editUser(req, res) {
 
 
 }
+
+async function getById(req, res) {
+    const jwtToken = req.header('auth-token');
+    const decoded = jwt.verify(jwtToken, process.env.TOKEN_SECRET);
+    User.findOne({ where : { id: decoded.id } }).then(user => {
+        return res.status(200).send(user);
+    });
+}
+
+
+async function files(req, res) {
+    const jwtToken = req.header('auth-token');
+    const decoded = jwt.verify(jwtToken, process.env.TOKEN_SECRET);
+    User.findOne({ where : { id: decoded.id } }).then(user => {
+        user.getFiles().then(files => {
+            return res.status(200).send(files);
+        })
+    });
+}
+
+module.exports = { register, login, edit, getById, files };

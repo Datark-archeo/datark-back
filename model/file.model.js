@@ -23,7 +23,10 @@ const File = Sequelize.define("file", {
         type: DataTypes.DATE,
         allowNull: false
     },
-
+    file_name: {
+        type: DataTypes.STRING,
+        allowNull: false
+    }
 })
 
 File.hasOne(User)
