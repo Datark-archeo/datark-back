@@ -1,51 +1,87 @@
-const { DataTypes } = require("sequelize");
-const sequelize = require("../utils/sequelize");
-const User = sequelize.define("user", {
+const mongoose = require('mongoose');
+
+const UserSchema = new mongoose.Schema({
     firstname: {
-      type: DataTypes.STRING,
-      allowNull: false
+        type: String,
+        required: true
     },
     surname: {
-      type: DataTypes.STRING,
-      allowNull: false
+        type: String,
+        required: true
+    },
+    username: {
+        type: String,
+        required: true,
     },
     email: {
-      type: DataTypes.STRING,
-        allowNull: false,
+        type: String,
+        required: true,
         unique: true
     },
     password: {
-      type: DataTypes.STRING,
-      allowNull: false
+        type: String,
+        required: true
     },
     country: {
-        type: DataTypes.STRING,
-        allowNull: false
+        type: String,
+        required: true
     },
     city: {
-        type: DataTypes.STRING,
-        allowNull: false
+        type: String,
+        required: true
     },
     birthday: {
-        type: DataTypes.DATEONLY,
-        allowNull: false
+        type: Date,
+        required: true
     },
     email_verified: {
-        type: DataTypes.BOOLEAN,
-        allowNull: false,
-        defaultValue: false
+        type: Boolean,
+        required: true,
+        default: false
     },
     verification_token: {
-        type: DataTypes.STRING,
-        allowNull: true
+        type: String,
+        default: null
     },
     expire_token: {
-        type: DataTypes.DATEONLY,
-        allowNull: true
+        type: Date,
+        default: null
     },
- });
+    refreshToken: [String],
+    roles: {
+        User: {
+            type: Number,
+            default: 2001
+        },
+        Admin: Number,
+    },
+    files: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'File'
+    }],
+    subscription: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Subscription',
+        default: null
+    },
+    following: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        default: null
+    }],
+    followers: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        default: null
+    }],
+    likedFiles: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'File'
+    }]
+}, {
+    timestamps: true,  // Ajoute les champs createdAt et updatedAt
+});
 
-
+const User = mongoose.model('User', UserSchema);
 
 module.exports = User;
- 

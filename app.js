@@ -1,54 +1,58 @@
-const express = require('express');
 require('dotenv').config();
-const path = require('path');
-const logger = require('morgan');
-const userController = require('./controller/user');
-const fileController = require('./controller/file');
-const { Admin, User, File, Follow, Liked, Subscribe, VerificationFile } = require('./utils/models');
-
+const express = require('express');
 const app = express();
+const cors = require('cors');
+const corsOptions = require('./config/corsOptions');
+const { logger } = require('./middleware/logEvents');
+const errorHandler = require('./middleware/errorHandler');
+const cookieParser = require('cookie-parser');
+const credentials = require('./middleware/credentials');
+const mongoose = require('mongoose');
+const connectDB = require('./utils/dbConnection');
+const PORT = process.env.PORT || 3500;
 
-app.use(logger('dev'));
-app.use(express.json());
+//connect to DB
+connectDB();
+
+// custom middleware logger
+app.use(logger);
+
+// Handle options credentials check - before CORS!
+// and fetch cookies credentials requirement
+app.use(credentials);
+
+// Cross Origin Resource Sharing
+app.use(cors(corsOptions));
+
+// built-in middleware to handle urlencoded form data
 app.use(express.urlencoded({ extended: true }));
 
-if (!process.env.TOKEN_SECRET) {
-    throw new Error('TOKEN_SECRET is not defined');
+// built-in middleware for json
+app.use(express.json());
+
+//middleware for cookies
+app.use(cookieParser());
+
+
+if (!process.env.ACCESS_TOKEN_SECRET) {
+    throw new Error('ACCESS_TOKEN_SECRET is not defined');
 }
+
 const prefix = '/api';
 
-// User
-app.route(prefix + '/user/register')
-    .post(userController.register);
+app.use(prefix + '/register', require('./routes/register'));
+app.use(prefix + '/login', require('./routes/auth'));
+app.use(prefix + '/refresh', require('./routes/refresh'));
+app.use(prefix + '/logout', require('./routes/logout'));
 
-app.route(prefix + '/user/login')
-    .post(userController.login);
+app.use(prefix +'/user', require('./routes/api/users'));
+app.use(prefix +'/file', require('./routes/api/files'));
 
-app.route(prefix + '/user')
-    .get(userController.getById);
+app.use(errorHandler);
 
-app.route(prefix + '/user/edit')
-    .get(userController.edit);
-
-app.route(prefix + '/user/files')
-    .get(userController.files);
-
-app.route(prefix + '/user/verify')
-    .get(userController.emailVerification);
-
-app.route(prefix + '/user/reset-password')
-    .get(userController.resetPassword);
-
-app.route(prefix + '/user/new-password')
-    .get(userController.newPassword);
-
-// File
-
-app.route(prefix + '/files')
-    .get(fileController.getAll);
-
-app.listen(8080, () => {
-    console.log("Server running on port 8080");
+mongoose.connection.once('open', () => {
+    console.log('MongoDB is Connected...');
+    app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 });
 
 module.exports = app;

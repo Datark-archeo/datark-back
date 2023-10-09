@@ -1,55 +1,58 @@
-const jwt = require('jsonwebtoken');
-const bcrypt = require('bcryptjs');
-const File = require("../models/file.model")
+const FileController = require("../models/file.model")
 const Version = require("../models/version.model")
 const fs = require('fs');
 const path = require('path');
 
 async function  upload(req, res) {
-    let body = req.body
-    const token = req.header('auth-token');
-
-    const userId = await jwt.verify(token, process.env.TOKEN_SECRET);
-    if (userId === null) {
+    let {name, description, date_upload, date_creation} = req.body
+    if (req.username === null) {
         return res.status(400).send({message : "Utilisateur non trouvé."});
     }
 
-    if (!body.name || !body.description || !body.date_upload || !body.date_creation) {
+    if (!name || !description || !date_upload || !date_creation) {
         return res.status(400).send({message : "Veuillez remplir tout les champs."});
     }
-    const file = await File.findOne({ where : { name: body.name } });
+
+    const file = await File.findOne({name: name }).exec();
     if (file !== null) {
         return res.status(400).send({message : "Le nom du fichier est déjà utilisé."});
     }
     const fileData = req.files.file;
+    if (!fileData) {
+        return res.status(400).send({message : "Aucun fichier n'a été envoyé."});
+    }
+
+    if(fileData.mimetype !== 'application/pdf') {
+        return res.status(400).send({message : "Le fichier doit être au format PDF."});
+    }
+
     const fileName = fileData.name;
-    const dir = path.join(__dirname, '../Users/' + userId + '/files/'+ fileName);
+    const dir = path.join(__dirname, '../Users/' + req.username + '/files/'+ fileName);
     if (!fs.existsSync(dir)){
         fs.mkdirSync(dir);
     }
     // save file
-
-    const filePath = dir + '/' + fileName;
+        const filePath = dir + '/' + fileName;
     fileData.mv(filePath, function(err) {
         if (err) {
             return res.status(500).send({message : "Erreur lors de l'upload du fichier."});
         }
     });
 
-    const newFile = await File.create({ name: body.name , description : body.description , date_upload : body.date_upload , date_creation : body.date_creation, file_name : fileName});
+    const newFile = await FileController.create({ name: body.name , description : body.description , date_upload : body.date_upload , date_creation : body.date_creation, file_name : fileName});
     newFile.setUser(User);
     return res.status(200).send({message : "Le fichier a bien été créé."});
 
 }
 
 async function getAll(req, res) {
-    const files = await File.findAll();
+    const files = await FileController.findAll();
     return res.status(200).send(files);
 }
 
 async function getById(req, res) {
     const id = req.params.id;
-    const file = await File.findOne({ where : { id: id } });
+    const file = await FileController.findOne({ _id: id  }).exec();
     if (file === null) {
         return res.status(400).send({message : "Fichier non trouvé."});
     }
@@ -60,8 +63,7 @@ async function edit(req, res) {
     let body = req.body
     const token = req.header('auth-token');
 
-    const userId = await jwt.verify(token, process.env.TOKEN_SECRET);
-    if (userId === null) {
+    if (req.username === null) {
         return res.status(400).send({message : "Utilisateur non trouvé."});
     }
 
@@ -69,13 +71,13 @@ async function edit(req, res) {
         return res.status(400).send({message : "Veuillez remplir au moins un champ."});
     }
 
-    const file = await File.findOne({ where : { id: body.fileId } });
+    const file = await FileController.findOne({ _id: body.fileId });
 
     if (file === null) {
         return res.status(400).send({message : "Fichier non trouvé."});
     }
 
-    if (file.userId !== userId) {
+    if (file.userId !== req.username) {
         return res.status(400).send({message : "Vous n'êtes pas le propriétaire du fichier."});
     }
 
@@ -94,8 +96,8 @@ async function edit(req, res) {
     if(body.isNewVersion) {
 
         //check if file have already versions
-        const versions = await Version.findAll({ where : { file_id: body.fileId } });
-        const dir = path.join(__dirname, '../Users/' + userId + '/files/' + file.file_name + '/versions');
+        const versions = await file.getVersions();
+        const dir = path.join(__dirname, '../Users/' + req.username + '/files/' + file.file_name + '/versions');
         if (!fs.existsSync(dir)){
             fs.mkdirSync(dir);
         }
@@ -130,3 +132,4 @@ async function edit(req, res) {
     return res.status(200).send({message : "Le fichier a bien été modifié."});
 }
 
+module.exports = { upload, getAll, getById, edit };

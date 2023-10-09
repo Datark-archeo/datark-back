@@ -1,18 +1,27 @@
-const { DataTypes } = require("sequelize");
-const sequelize = require("../utils/sequelize");
-const VerificationFile = sequelize.define('verification_file', {
+const mongoose = require('mongoose');
+
+const VerificationFileSchema = new mongoose.Schema({
     name: {
-        type: DataTypes.STRING,
-        allowNull: false
+        type: String,
+        required: true
     },
     validated: {
-        type: DataTypes.BOOLEAN,
-        allowNull: false
+        type: Boolean,
+        required: true
     },
     date_verification: {
-        type: DataTypes.DATEONLY,
-        allowNull: false
+        type: Date,
+        required: true
+    },
+    validated_by: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true
     }
+}, {
+    timestamps: true,
 });
+
+const VerificationFile = mongoose.model('VerificationFile', VerificationFileSchema);
 
 module.exports = VerificationFile;

@@ -1,25 +1,22 @@
-const { DataTypes } = require("sequelize");
-const sequelize = require("../utils/sequelize");
-const Subscribe = sequelize.define("subscribe", {
-    id: {
-        type: DataTypes.INTEGER,
-        autoIncrement : true,
-        primaryKey : true,
-    
-    },
+const mongoose = require('mongoose');
+
+const SubscribeSchema = new mongoose.Schema({
     name: {
-        type: DataTypes.STRING,
-        allowNull: false
+        type: String,
+        required: true
     },
     description: {
-        type: DataTypes.STRING,
-        allowNull: false
+        type: String,
+        required: true
     },
     price: {
-        type: DataTypes.FLOAT,
-        allowNull: false
-      },
-      
-})
+        type: Number,
+        required: true
+    }
+}, {
+    timestamps: true,
+});
+
+const Subscribe = mongoose.model('Subscribe', SubscribeSchema);
 
 module.exports = Subscribe;

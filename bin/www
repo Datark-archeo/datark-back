@@ -3,10 +3,9 @@
 /**
  * Module dependencies.
  */
-
-var app = require('../app');
-var debug = require('debug')('datark-back:server');
-var http = require('http');
+const app = require('../app');
+const debug = require('debug')('datark-back:server');
+const http = require('http');
 
 /**
  * Get port from environment and store in Express.
