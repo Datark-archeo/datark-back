@@ -3,7 +3,8 @@ const Version = require("../models/version.model")
 const fs = require('fs');
 const path = require('path');
 
-async function  upload(req, res) {
+
+async function  upload(req, res)  {
     let {name, description, date_upload, date_creation} = req.body
     if (req.username === null) {
         return res.status(400).send({message : "Utilisateur non trouvé."});
@@ -18,6 +19,13 @@ async function  upload(req, res) {
         return res.status(400).send({message : "Le nom du fichier est déjà utilisé."});
     }
     const fileData = req.files.file;
+    const files = req.files;
+    Object.keys(files).forEach(key => {
+        const filepath = path.join(__dirname, `files/${req.username}`, files[key].name)
+        files[key].mv(filepath, (err) => {
+            if (err) return res.status(500).json({ status: "error", message: err })
+        })
+    });
     if (!fileData) {
         return res.status(400).send({message : "Aucun fichier n'a été envoyé."});
     }
