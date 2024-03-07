@@ -33,13 +33,23 @@ app.use(express.json());
 //middleware for cookies
 app.use(cookieParser());
 
-
 if (!process.env.ACCESS_TOKEN_SECRET) {
     throw new Error('ACCESS_TOKEN_SECRET is not defined');
+} else if (!process.env.REFRESH_TOKEN_SECRET) {
+    throw new Error('REFRESH_TOKEN_SECRET is not defined');
+} else if (!process.env.MONGODB_URI) {
+    throw new Error('MONGODB_URI is not defined');
+} else if (!process.env.GOOGLE_CLIENT_ID) {
+    throw new Error('GOOGLE_CLIENT_ID is not defined');
+} else if (!process.env.GOOGLE_CLIENT_SECRET) {
+    throw new Error('GOOGLE_CLIENT_SECRET is not defined');
+} else if (!process.env.GOOGLE_REFRESH_TOKEN) {
+    throw new Error('GOOGLE_REFRESH_TOKEN is not defined');
+} else if (!process.env.GOOGLE_EMAIL) {
+    throw new Error('GOOGLE_EMAIL is not defined');
 }
 
 const prefix = '/api';
-
 app.use(prefix + '/register', require('./routes/register'));
 app.use(prefix + '/login', require('./routes/auth'));
 app.use(prefix + '/refresh', require('./routes/refresh'));

@@ -8,10 +8,6 @@ router.route('/')
     .put(verifyJWT, userController.edit)
     .delete(verifyJWT, userController.deleteUser);
 
-router.route('/:id')
-    .get(userController.getById);
-
-
 router.route('/files')
     .get(verifyJWT, userController.files);
 
@@ -28,6 +24,3 @@ router.route('/new-password')
     .get(userController.newPassword);
 
 module.exports = router;
-
-//router.route('/:id')
-//    .get(verifyRoles(ROLES_LIST.Admin), usersController.getUser);

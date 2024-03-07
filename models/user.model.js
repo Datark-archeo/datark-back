@@ -77,7 +77,11 @@ const UserSchema = new mongoose.Schema({
     likedFiles: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: 'File'
-    }]
+    }],
+    downloadedFiles: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'File'
+    }],
 }, {
     timestamps: true,  // Ajoute les champs createdAt et updatedAt
 });
