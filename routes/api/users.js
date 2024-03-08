@@ -18,9 +18,9 @@ router.route('/resend')
     .get(userController.resendEmailVerification);
 
 router.route('/reset-password')
-    .get(verifyJWT, userController.resetPassword);
+    .post(userController.resetPassword);
 
 router.route('/new-password')
-    .get(userController.newPassword);
+    .post(userController.newPassword);
 
 module.exports = router;

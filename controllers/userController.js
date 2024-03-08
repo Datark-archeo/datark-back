@@ -8,21 +8,21 @@ require('dotenv').config();
 
 async function edit(req, res) {
 
-    let body = req.body
+    let body = req.body.user
 
      if (!body.firstname || !body.surname || !body.country || !body.city || !body.birthday ) {
-         return res.status(400).send({message : "Au moins un champ doit être rempli."});
+         return res.status(400).send({message : "At least one input must be filled"});
      
      }
     const user = await User.findOne( {username: req.username }).exec();
     if (user === null) {
-        return res.status(400).send({message : "Adresse email ou mot de passe incorrect."});
+        return res.status(400).send({message : "User not found."});
     }
 
     // Si l'utilisateur veut changer son email
     if(body.newEmail) {
         if(body.newEmail !== body.confirmEmail){
-            return res.status(400).send({message : "Les adresses email ne correspondent pas."});
+            return res.status(400).send({message : "The emails do not match."});
         }
         user.email = body.newEmail;
     }
@@ -30,7 +30,7 @@ async function edit(req, res) {
     // Si l'utilisateur veut changer son mot de passe
     if(body.newPassword) {
         if(body.newPassword !== body.confirmPassword){
-            return res.status(400).send({message : "Les mots de passe ne correspondent pas."});
+            return res.status(400).send({message : "The passwords do not match."});
         }
         const salt = await bcrypt.genSalt(10);
         user.password = await bcrypt.hash(body.newPassword, salt);
@@ -113,21 +113,24 @@ async function emailVerification(req, res) {
 
 function resetPassword(req, res) {
     try {
-        User.findOne({ username: req.username }).exec().then(user => {
+        const {email} = req.body;
+        User.findOne({ email: email }).exec().then(user => {
+            if(user === null){
+                return res.status(400).send({message : "User not found."});
+            }
             const token = crypto.randomBytes(32).toString('hex');
             const expire_token = new Date();
             expire_token.setHours(expire_token.getHours() + 3);  // Le token expire dans 1 heure
-            user.update({
-                verification_token: token,
-                expire_token: expire_token
-            });
+            user.verification_token = token;
+            user.expire_token = expire_token;
+            user.save();
             const mailOptions = {
                 from: `${process.env.MAIL_SENDER}`,
                 to: `${user.email}`,
                 subject: 'Réinitialisation de votre mot de passe',
                 html: `<p>Bonjour ${user.firstname},</p>
             Veuillez cliquer sur le lien ci-dessous pour réinitialiser votre mot de passe.</p>
-            <a href="http://localhost:3500/api/user/reset?token=${token}">Réinitialiser mon mot de passe</a>
+            <a href="${process.env.FRONTEND_URL}/reset-password?token=${token}">Réinitialiser mon mot de passe</a>
             <p>Ce lien expirera dans 3 heures.</p>
             <p>Cordialement,</p>
             <p>L'équipe de Datark</p>`
@@ -138,6 +141,7 @@ function resetPassword(req, res) {
                     return res.status(400).send({message : "Une erreur est survenue lors de l'envoi du mail."});
                 } else {
                     console.log('Email sent: ' + info.response);
+                    return res.status(200).send({message : "Un mail de réinitialisation de mot de passe a été envoyé."});
                 }
             });
         });
@@ -154,7 +158,7 @@ function newPassword(req, res) {
     if(!token){
         return res.status(400).send({message : "Pas de token fourni dans la requête."});
     }
-    User.findOne({verification_token: token }).exec().then(user => {
+    User.findOne({verification_token: token }).exec().then(async  user => {
         if(user === null){
             return res.status(400).send({message : "Token invalide."});
         }
@@ -165,7 +169,8 @@ function newPassword(req, res) {
         if(body.password !== body.confirmPassword){
             return res.status(400).send({message : "Les mots de passe ne correspondent pas."});
         }
-        user.password = req.body.password;
+        const salt = await bcrypt.genSalt(10);
+        user.password = await bcrypt.hash(req.body.password, salt);
         user.verification_token = null;
         user.expire_token = null;
         user.save();
