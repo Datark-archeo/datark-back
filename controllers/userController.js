@@ -73,11 +73,10 @@ async function getById(req, res) {
 
 async function getInfo(req, res) {
     let username = req.username;
-    let foundedUser = await User.findOne({ username: username });
+    let foundedUser = await User.findOne({ username: username }).populate('downloadedFiles').populate('files');
     if (!foundedUser) {
         return res.status(400).json({ "message": `Utilisateur non trouvé` });
     }
-
     return res.status(200).json({ "user": foundedUser });
 }
 

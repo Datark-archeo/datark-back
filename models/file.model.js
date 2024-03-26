@@ -34,7 +34,17 @@ const FileSchema = new mongoose.Schema({
     likesCount: {
         type: Number,
         default: 0
-    }
+    },
+    pactolsLieux: [
+        {
+            type: String,
+        }
+    ],
+    pactolsSujets: [
+        {
+            type: String,
+        }
+    ],
 }, {
     timestamps: true,  // Ceci ajoutera des champs pour le moment de la création et de la modification
 });

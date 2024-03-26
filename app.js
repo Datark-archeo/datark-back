@@ -10,12 +10,14 @@ const credentials = require('./middleware/credentials');
 const mongoose = require('mongoose');
 const connectDB = require('./utils/dbConnection');
 const PORT = process.env.PORT || 3500;
+const fileUpload = require('express-fileupload');
 
 //connect to DB
 connectDB();
 
 // custom middleware logger
 app.use(logger);
+
 
 // Handle options credentials check - before CORS!
 // and fetch cookies credentials requirement
@@ -57,6 +59,7 @@ app.use(prefix + '/logout', require('./routes/logout'));
 
 app.use(prefix +'/user', require('./routes/api/users'));
 app.use(prefix +'/file', require('./routes/api/files'));
+app.use(prefix +'/pactols', require('./routes/api/pactols'));
 
 app.use(errorHandler);
 
