@@ -4,7 +4,8 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "start": "nodemon ./bin/www"
+    "start": "node./bin/www",
+    "dev": "nodemon ./bin/www",
   },
   "dependencies": {
     "all-the-cities": "^3.1.0",
