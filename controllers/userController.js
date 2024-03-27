@@ -197,7 +197,7 @@ async function resendEmailVerification(req, res) {
         subject: 'Vérification de votre adresse email',
         html: `<p>Bonjour ${user.firstname},</p>
         <p>Veuillez cliquer sur le lien ci-dessous pour vérifier votre adresse email.</p>
-        <a href="http://localhost:8080/api/user/verify?token=${token}">Vérifier mon adresse email</a>
+        <a href="${process.env.BACKEND_URL}/api/user/verify?token=${token}">Vérifier mon adresse email</a>
         <p>Ce lien expirera dans 3 heures.</p>
         <p>Cordialement,</p>
         <p>L'équipe de Datark</p>`
