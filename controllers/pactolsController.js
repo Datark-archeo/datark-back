@@ -13,11 +13,14 @@ async function parseRdfFile(filePath, lang) {
         const input = fs.createReadStream(filePath);
         const parser = new RdfXmlParser();
         let tempMap = new Map();
+        let uniqueLabels = new Map();
 
         input.pipe(parser)
             .on('data', (quad) => {
                 // On filtre par langue pour les labels et d'extraire les identifiants
                 if (quad.predicate.value === 'http://www.w3.org/2004/02/skos/core#prefLabel' && quad.object.language === lang) {
+                    if (uniqueLabels.has(quad.object.value)) return;
+                    uniqueLabels.set(quad.object.value, true);
                     if (!tempMap.has(quad.subject.value)) {
                         tempMap.set(quad.subject.value, { subject: quad.subject.value });
                     }
