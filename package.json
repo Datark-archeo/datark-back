@@ -30,6 +30,9 @@
     "oai-pmh": "^2.0.3",
     "rdf-data-factory": "^1.1.2",
     "rdfxml-streaming-parser": "^2.4.0",
+    "socket.io": "^4.7.5",
+    "socket.io-client": "^4.7.5",
+    "throttle": "^1.0.3",
     "uuid": "^9.0.1"
   }
 }

@@ -10,4 +10,7 @@ router.route('/lieux')
     .get(pactolsController.getLieux);
 
 
+// router.route('/mongoDB')
+//     .get(pactolsController.saveToMongoDB);
+
 module.exports = router;

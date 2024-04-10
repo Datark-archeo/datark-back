@@ -1,10 +1,9 @@
 const FileModel = require("../models/file.model")
 const Version = require("../models/version.model")
 const fs = require('fs');
-const stream = require('stream');
 const path = require('path');
 const User = require('../models/user.model');
-
+const Throttle = require('throttle');
 async function  upload(req, res)  {
 
     let {name, description, date_creation, pactolsLieux, pactolsSujets} = req.body
@@ -260,31 +259,68 @@ async function searchComplexFiles(req, res) {
 async function download(req, res) {
     const id = req.params.id;
     const file = await FileModel.findOne({_id: id}).populate('owner').exec();
+    const username = req.username;
+    let isSubscriber = false;
+
 
     if (file === null) {
         return res.status(404).send({message: "Fichier non trouvé."});
     }
 
     const filePath = path.join(__dirname, '../users/' + file.owner.username + `/files/${file.file_name}/${file.file_name}`);
+    if(username) {
+        const user = await User.findOne({username: username}).exec();
+        if (!user) {
+            return res.status(404).send({message: "Utilisateur non trouvé."});
+        }
+        user.downloadedFiles.push(file._id);
+        await user.save();
+        isSubscriber = user.subscription !== null;
+
+    }
 
     // Vérification de l'existence du fichier
     fs.access(filePath, fs.constants.R_OK, (err) => {
         if (err) {
             return res.status(404).send({message: "Fichier non trouvé ou accès refusé."});
         }
+        const year = file.date_publication.getFullYear();
+        const fileName = `${file.owner.name}_${year}.pdf`
+        const throttleRate = isSubscriber ? 1024 * 1024 * 10 : 1024 * 100;
 
         const fileStream = fs.createReadStream(filePath);
-        res.set('Content-disposition', 'attachment; filename=' + file.file_name);
+        res.set('Content-disposition', 'attachment; filename=' + fileName);
         res.set('Content-Type', 'application/pdf');
+
+        const throttle = new Throttle(throttleRate);
 
         fileStream.on('error', (streamErr) => {
             console.error(streamErr);
             res.status(500).send({message: "Erreur lors de la lecture du fichier."});
         });
 
-        fileStream.pipe(res);
+        fileStream.pipe(throttle).pipe(res);
     });
 }
 
+async function deleteFile(req, res) {
+    const id = req.params.id;
+    const file = await FileModel.findOne({ _id: id }).populate('owner').exec();
+    if (file === null) {
+        return res.status(404).send({message : "Fichier non trouvé."});
+    }
+    if (file.owner.username !== req.username) {
+        return res.status(400).send({message : "Vous n'êtes pas le propriétaire du fichier."});
+    }
+    const filePath = path.join(__dirname, '../users/' + file.owner.username + `/files/${file.file_name}/${file.file_name}`);
+    fs.unlink(filePath, (err) => {
+        if (err) {
+            return res.status(500).send({message : "Erreur lors de la suppression du fichier."});
+        }
+    });
+    await file.delete();
+    return res.status(200).send({message : "Le fichier a bien été supprimé."});
+}
 
-module.exports = { upload, getAll, getById, edit, searchFiles, searchComplexFiles, download};
+
+module.exports = { upload, getAll, getById, edit, searchFiles, searchComplexFiles, download, deleteFile};

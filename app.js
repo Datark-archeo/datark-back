@@ -10,7 +10,6 @@ const credentials = require('./middleware/credentials');
 const mongoose = require('mongoose');
 const connectDB = require('./utils/dbConnection');
 const PORT = process.env.PORT || 3500;
-const fileUpload = require('express-fileupload');
 
 //connect to DB
 connectDB();

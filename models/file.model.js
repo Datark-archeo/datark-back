@@ -22,6 +22,10 @@ const FileSchema = new mongoose.Schema({
         ref: 'User',
         required: true
     },
+    coOwners: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+    }],
     version: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Version',

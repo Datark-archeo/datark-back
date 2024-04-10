@@ -3,50 +3,17 @@ const factory = new DataFactory();
 const { RdfXmlParser } = require('rdfxml-streaming-parser');
 const fs = require('fs');
 const path = require('path');
+const Pactols = require('../models/pactols.model');
 
 const rdfFilePathLieux = path.join(__dirname, '../pactols/pactols_lieux.rdf');
 const rdfFilePathSujets = path.join(__dirname, '../pactols/pactols_sujets_all.rdf');
 
 // Fonction pour parser les fichiers RDF et filtrer les résultats en fonction de la langue
-async function parseRdfFile(filePath, lang) {
-    return new Promise((resolve, reject) => {
-        const input = fs.createReadStream(filePath);
-        const parser = new RdfXmlParser();
-        let tempMap = new Map();
-        let uniqueLabels = new Map();
-
-        input.pipe(parser)
-            .on('data', (quad) => {
-                // On filtre par langue pour les labels et d'extraire les identifiants
-                if (quad.predicate.value === 'http://www.w3.org/2004/02/skos/core#prefLabel' && quad.object.language === lang) {
-                    if (uniqueLabels.has(quad.object.value)) return;
-                    uniqueLabels.set(quad.object.value, true);
-                    if (!tempMap.has(quad.subject.value)) {
-                        tempMap.set(quad.subject.value, { subject: quad.subject.value });
-                    }
-                    tempMap.get(quad.subject.value).label = quad.object.value;
-                } else if (quad.predicate.value === 'http://purl.org/dc/terms/identifier') {
-                    if (!tempMap.has(quad.subject.value)) {
-                        tempMap.set(quad.subject.value, { subject: quad.subject.value });
-                    }
-                    tempMap.get(quad.subject.value).identifier = quad.object.value;
-                }
-            })
-            .on('error', (error) => reject(error))
-            .on('end', () => {
-                // Filtrer pour ne garder que les résultats ayant à la fois un label, un identifier et un subject
-                const results = Array.from(tempMap.values()).filter(item => item.label && item.identifier && item.subject);
-                resolve(results);
-            });
-    });
-}
-
-
-
 async function getLieux(req, res) {
     const lang = req.query.lang || 'fr';
     try {
-        const results = await parseRdfFile(rdfFilePathLieux, lang);
+        // Recherche les lieux dans la base de données par langue
+        const results = await Pactols.find({ lang: lang, type: 'lieux' });
         res.json(results);
     } catch (error) {
         res.status(500).send({ message: "Erreur lors de la récupération des lieux", error });
@@ -56,13 +23,53 @@ async function getLieux(req, res) {
 async function getSujets(req, res) {
     const lang = req.query.lang || 'fr';
     try {
-        const results = await parseRdfFile(rdfFilePathSujets, lang);
+        // Recherche les sujets dans la base de données par langue
+        const results = await Pactols.find({ lang: lang, type: 'sujets' });
         res.json(results);
     } catch (error) {
         res.status(500).send({ message: "Erreur lors de la récupération des sujets", error });
     }
 }
 
+async function saveToMongoDB(req, res) {
+    try {
+        // Récupérer la liste des fichiers dans le dossier `./translate`
+        const translatePath = path.join(__dirname, '../translate');
+        const files = fs.readdirSync(translatePath);
+
+        for (const file of files) {
+            if (path.extname(file) === '.json') {
+                // Lire le contenu du fichier
+                const filePath = path.join(translatePath, file);
+                console.log(`Lecture du fichier ${filePath}...`);
+                const data = fs.readFileSync(filePath);
+                // Parser les données JSON
+                const terms = JSON.parse(data);
+
+                for (const term of terms) {
+                    const { label, identifier, lang, type } = term;
+                    // Créer un nouveau document Pactols
+                    const pactols = await Pactols.create({
+                        label: label,
+                        identifier: identifier,
+                        lang: lang,
+                        type: type,
+                    });
+                    if(pactols) {
+                        console.log(`Le terme ${label} a été sauvegardé dans la base de données.`);
+                    } else {
+                        console.log(`Erreur lors de la sauvegarde du terme ${label} dans la base de données.`);
+
+                    }
+                }
+            }
+        }
+        res.send('Les termes ont été sauvegardés dans la base de données.');
+    } catch (error) {
+        res.status(500).send({ message: "Erreur lors de la sauvegarde des termes dans la base de données", error });
+    }
+}
 
 
-module.exports = { getSujets, getLieux };
+
+module.exports = { getSujets, getLieux, saveToMongoDB };

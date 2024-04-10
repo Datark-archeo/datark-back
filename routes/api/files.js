@@ -6,6 +6,7 @@ const fileSizeLimiter = require('../../middleware/fileSizeLimiter');
 const filesPayloadExists = require('../../middleware/filesPayloadExists');
 const fileUpload = require("express-fileupload");
 const verifyJWT = require("../../middleware/verifyJWT");
+const isLogin = require("../../middleware/isLogin");
 
 router.route('/')
     .get(fileController.getAll)
@@ -32,10 +33,11 @@ router.route('/complexSearch')
     .post(fileController.searchComplexFiles)
 
 router.route('/download/:id')
-    .get(fileController.download)
+    .get(isLogin, fileController.download)
 
 router.route('/:id')
     .get(fileController.getById)
+    .delete(verifyJWT,fileController.deleteFile)
 
 
 module.exports = router;
