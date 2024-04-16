@@ -10,7 +10,7 @@ async function edit(req, res) {
 
     let body = req.body.user
 
-     if (!body.firstname || !body.surname || !body.country || !body.city || !body.birthday ) {
+     if (!body.firstname || !body.surname || !body.country || !body.city || !body.birthday) {
          return res.status(400).send({message : "At least one input must be filled"});
      
      }
@@ -21,11 +21,16 @@ async function edit(req, res) {
 
     // Si l'utilisateur veut changer son email
     if(body.newEmail) {
+        if(!body.confirmEmail){
+            return res.status(400).send({message : "Please confirm your email."});
+        }
         if(body.newEmail !== body.confirmEmail){
             return res.status(400).send({message : "The emails do not match."});
         }
         user.email = body.newEmail;
     }
+
+    if(body.newUser)
     
     // Si l'utilisateur veut changer son mot de passe
     if(body.newPassword) {
@@ -73,7 +78,10 @@ async function getById(req, res) {
 
 async function getInfo(req, res) {
     let username = req.username;
-    let foundedUser = await User.findOne({ username: username }).populate('downloadedFiles').populate('files');
+    let foundedUser = await User.findOne({ $or: [
+        { username: username },
+        { email: username }
+        ]}).populate('downloadedFiles').populate('files');
     if (!foundedUser) {
         return res.status(400).json({ "message": `Utilisateur non trouvé` });
     }
@@ -90,7 +98,6 @@ async function files(req, res) {
 
 async function emailVerification(req, res) {
     const token = req.query.token;
-    console.log(token);
     if (!token) {
         return res.status(400).send({message: "Pas de token fourni dans la requête."});
     }
@@ -136,7 +143,6 @@ function resetPassword(req, res) {
             };
             transporter.sendMail(mailOptions, function(error, info){
                 if (error) {
-                    console.log(error);
                     return res.status(400).send({message : "Une erreur est survenue lors de l'envoi du mail."});
                 } else {
                     console.log('Email sent: ' + info.response);
@@ -228,4 +234,43 @@ async function deleteUser(req, res) {
     return res.status(200).json({ "message": `Utilisateur supprimé` });
 }
 
-module.exports = { edit, getById, files, emailVerification, resendEmailVerification, resetPassword, newPassword, deleteUser, getInfo };
+async function setUser(req, res) {
+    const { user } = req.body;
+    if(!user.username || !user.email || !user.city || !user.country || !user.birthday){
+        return res.status(400).send({message : "Veuillez remplir tous les champs."});
+    }
+
+    const foundUser = await User.findOne({email: user.email}).exec();
+    const similarUser = await User.findOne({username: user.username}).exec();
+    if(similarUser) {
+        return res.status(400).send({message : "Le nom d'utilisateur est déjà pris."});
+    }
+    if(!foundUser){
+        return res.status(400).send({message : "Utilisateur introuvable."});
+    }
+    if(foundUser.username !== "default"){
+        return res.status(400).send({message : "L'utilisateur a déjà été créé."});
+    }
+
+    foundUser.username = user.username;
+    foundUser.city = user.city;
+    foundUser.country = user.country;
+    foundUser.birthday = user.birthday;
+    await foundUser.save();
+
+    return res.status(200).send({message : "L'utilisateur a bien été créé."});
+
+}
+
+
+async function getAllUsers(req, res) {
+    try {
+        const users = await User.find({}, 'firstname surname username email').exec(); // Utilisez la projection pour sélectionner les champs
+        res.status(200).json(users);
+    } catch (error) {
+        console.error("Erreur lors de la récupération des utilisateurs: ", error);
+        res.status(500).json({ message: "Erreur lors de la récupération des utilisateurs" });
+    }
+}
+
+module.exports = { edit, getById, files, emailVerification, resendEmailVerification, resetPassword, newPassword, deleteUser, getInfo, setUser, getAllUsers };

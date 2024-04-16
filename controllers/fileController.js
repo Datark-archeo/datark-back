@@ -4,9 +4,10 @@ const fs = require('fs');
 const path = require('path');
 const User = require('../models/user.model');
 const Throttle = require('throttle');
+const {transporter} = require('../utils/nodemailer');
 async function  upload(req, res)  {
 
-    let {name, description, date_creation, pactolsLieux, pactolsSujets} = req.body
+    let {name, description, date_creation, pactolsLieux, coOwnersMail} = req.body
     if (!req.username) {
         return res.status(400).send({message : "Utilisateur non trouvé."});
     }
@@ -21,12 +22,7 @@ async function  upload(req, res)  {
     }
     const fileData = req.files.file;
     const files = req.files;
-    Object.keys(files).forEach(key => {
-        const filepath = path.join(__dirname, `files/${req.username}`, files[key].name)
-        files[key].mv(filepath, (err) => {
-            if (err) return res.status(500).json({ status: "error", message: err })
-        })
-    });
+
     if (!fileData) {
         return res.status(400).send({message : "Aucun fichier n'a été envoyé."});
     }
@@ -44,6 +40,14 @@ async function  upload(req, res)  {
     } else {
         return res.status(400).send({message : "Le fichier existe déjà."});
     }
+
+    Object.keys(files).forEach(key => {
+        const filepath = path.join(__dirname, `files/${req.username}`, files[key].name)
+        files[key].mv(filepath, (err) => {
+            if (err) return res.status(500).json({ status: "error", message: err })
+        })
+    });
+
     //save file
     const filePath = dir + '/' + fileName;
 
@@ -58,6 +62,32 @@ async function  upload(req, res)  {
             return res.status(500).send({message : "Erreur lors de l'upload du fichier."});
         }
     });
+    // recherchez les coOwners par email si pas trouvé, créer un compte avec un mot de passe aléatoire et envoyer un email d'invitation
+    let coOwners = [];
+    if(coOwnersMail) {
+        coOwnersMail.split(',').map(async email => {
+            let coOwner = await User.find({email: email}).exec();
+            if(!coOwner) {
+                const randomPassword = Math.random().toString(36).slice(-8);
+                coOwner = await User.create({email: email, password: randomPassword, username: 'default'});
+                transporter.sendMail({
+                    from: '"Datark invitation" <no-reply@datark.com>',
+                    to: email,
+                    subject: 'Invitation à rejoindre Datark',
+                    html: `<p>Bonjour,</p>
+                            <p>Vous avez été invité à rejoindre Datark pour collaborer sur un fichier.</p>
+                            <p>Votre mot de passe temporaire est : ${randomPassword}</p>
+                            <p>Connectez-vous à votre compte afin de compléter votre profile.</p>
+                            <a href="${process.env.FRONTEND_URL}/login">Se connecter</a>
+                            <p>Lien: ${process.env.FRONTEND_URL}/login </p>
+                            <p>Cordialement,</p>
+                            <p>L'équipe Datark</p>`
+                });
+            } else {
+                coOwners.push(coOwner);
+            }
+        });
+    }
     User.findOne({'username': req.username}).exec().then(async user => {
         if (!user) {
             return res.status(400).send({message : "Utilisateur non trouvé."});
@@ -73,18 +103,24 @@ async function  upload(req, res)  {
         });
         user.files.push(newFile._id);
         await user.save();
+        if(coOwners.length > 0) {
+            coOwners.forEach(coOwner => {
+                coOwner.files.push(newFile._id);
+                newFile.coOwners.push(coOwner._id);
+                coOwner.save();
+            });
+        }
         return res.status(200).send({message : "Le fichier a bien été créé.", file: newFile});
     });
 }
 
 async function getAll(req, res) {
-    const files = await FileModel.find({}).populate('owner', 'name');
+    const files = await FileModel.find({}).populate('owner').populate('coOwners').exec();
     return res.status(200).send(files);
 }
 
 async function getById(req, res) {
     const id = req.params.id;
-    console.log(id);
     const file = await FileModel.findOne({ _id: id  }).populate('owner').exec();
     if (file === null) {
         return res.status(400).send({message : "Fichier non trouvé."});
@@ -256,6 +292,25 @@ async function searchComplexFiles(req, res) {
     }
 }
 
+async function getUsersWithFiles(req, res) {
+    const files = await FileModel.find({}).lean();
+    let userIds = files.reduce((acc, file) => {
+        acc.add(file.owner.toString()); // Ajouter le propriétaire
+        if(file.coOwners) {
+            file.coOwners.forEach(coOwner => acc.add(coOwner.toString())); // Ajouter les co-propriétaires
+        }
+        return acc;
+    }, new Set());
+
+    // Convertir le Set en tableau
+    userIds = [...userIds];
+
+    // Trouver les utilisateurs correspondant aux ID récupérés
+    const users = await User.find({ '_id': { $in: userIds } }, 'firstname surname username');
+
+    res.json(users); // Envoyer la liste des utilisateurs en réponse
+}
+
 async function download(req, res) {
     const id = req.params.id;
     const file = await FileModel.findOne({_id: id}).populate('owner').exec();
@@ -323,4 +378,4 @@ async function deleteFile(req, res) {
 }
 
 
-module.exports = { upload, getAll, getById, edit, searchFiles, searchComplexFiles, download, deleteFile};
+module.exports = { upload, getAll, getById, edit, searchFiles, searchComplexFiles, download, deleteFile, getUsersWithFiles};

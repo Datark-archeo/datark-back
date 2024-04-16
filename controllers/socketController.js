@@ -1,7 +1,7 @@
 const Message = require('../models/message.model');
 const jwt = require('jsonwebtoken');
 const User = require("../models/user.model"); // Assurez-vous d'avoir un modèle Message pour MongoDB
-
+const Conversation = require("../models/conversation.model"); // Assurez-vous d'avoir un modèle Conversation pour MongoDB
 function setupSocketHandlers(io) {
     console.log('Configuration des gestionnaires d’événements Socket.IO');
     io.on('connection', async (socket) => {
@@ -45,13 +45,40 @@ function setupSocketHandlers(io) {
         }
         socket.on('sendMessage', async (data) => {
             try {
-                const message = new Message(data); // Création d'une nouvelle instance du modèle Message
-                await message.save(); // Sauvegarde du message dans MongoDB
-                io.emit('receiveMessage', data); // Envoi du message à tous les clients
+                const user = await User.findOne({ username: data.username }).populate(['followers','following']).exec();
+                const conversation = await Conversation.findOne({ _id: data.conversationId }).populate('participants').exec();
+                if (!user || !conversation) {
+                    socket.emit('error', 'Utilisateur ou conversation introuvable')
+                    console.error('Utilisateur ou conversation introuvable');
+                    return;
+                }
+
+                const isParticipant = conversation.participants.some(participant => participant._id.equals(user._id));
+                if (!isParticipant) {
+                    console.error('Utilisateur non autorisé à envoyer des messages dans cette conversation');
+                    return;
+                }
+
+                const otherParticipants = conversation.participants.filter(participant => !participant._id.equals(user._id));
+                const followsAllParticipants = otherParticipants.every(participant => user.following.some(following => following._id.equals(participant._id)));
+                if (!followsAllParticipants) {
+                    socket.emit('error', 'Utilisateur ou conversation introuvable')
+                    console.warn('L’utilisateur ne suit pas tous les participants.');
+                    return;
+                }
+
+                const message = Message.create({
+                    content: data.content,
+                    sender: user._id,
+                    conversation: conversation._id
+                });
+                io.emit('receiveMessage', data);
             } catch (error) {
+                socket.emit('error', 'Utilisateur ou conversation introuvable')
                 console.error('Erreur de sauvegarde du message', error);
             }
         });
+
 
         socket.on('disconnect', () => {
             console.log('Un utilisateur s\'est déconnecté');

@@ -7,7 +7,6 @@ const handleRefreshToken = async (req, res) => {
     const cookies = req.cookies;
     if (!cookies?.jwt) return res.sendStatus(401);
     const refreshToken = cookies.jwt;
-    console.log(refreshToken);
     res.clearCookie('jwt', { httpOnly: true, secure: true });
 
     const foundUser = await User.findOne({ refreshToken }).exec();
@@ -23,7 +22,6 @@ const handleRefreshToken = async (req, res) => {
                 const hackedUser = await User.findOne({ username: decoded.username }).exec();
                 hackedUser.refreshToken = [];
                 const result = await hackedUser.save();
-                console.log(result);
             }
         )
         return res.sendStatus(403); //Forbidden
@@ -40,7 +38,6 @@ const handleRefreshToken = async (req, res) => {
                 console.log('expired refresh token')
                 foundUser.refreshToken = [...newRefreshTokenArray];
                 const result = await foundUser.save();
-                console.log(result);
             }
             if (err || foundUser.username !== decoded.username) return res.sendStatus(403);
 

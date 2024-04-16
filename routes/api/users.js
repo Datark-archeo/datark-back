@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const userController = require('../../controllers/userController');
+const invitationController = require('../../controllers/invitationController');
 const verifyJWT = require('../../middleware/verifyJWT');
 
 router.route('/')
@@ -22,5 +23,17 @@ router.route('/reset-password')
 
 router.route('/new-password')
     .post(userController.newPassword);
+
+router.route('/send-invitation')
+    .post( invitationController.sendInvitation);
+
+router.route('/accept-invitation')
+    .post(invitationController.acceptInvitation);
+
+router.route('/setUser')
+    .post(userController.setUser);
+
+router.route('/all')
+    .get(userController.getAllUsers);
 
 module.exports = router;

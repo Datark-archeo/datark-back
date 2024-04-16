@@ -11,6 +11,9 @@ const isLogin = require("../../middleware/isLogin");
 router.route('/')
     .get(fileController.getAll)
 
+router.route('/user')
+    .get(fileController.getUsersWithFiles)
+
 router.route('/upload',)
     .post([
         verifyJWT,
@@ -26,7 +29,7 @@ router.route('/edit/:id')
             fileExtLimiter(['.pdf']),
             fileSizeLimiter],fileController.edit)
 
-router.route('/search/')
+router.route('/search')
     .get(fileController.searchFiles)
 
 router.route('/complexSearch')
@@ -38,6 +41,7 @@ router.route('/download/:id')
 router.route('/:id')
     .get(fileController.getById)
     .delete(verifyJWT,fileController.deleteFile)
+
 
 
 module.exports = router;

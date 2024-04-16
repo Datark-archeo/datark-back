@@ -4,7 +4,6 @@ const bcrypt = require('bcrypt');
 const transporter = require('../utils/nodemailer');
 const handleNewUser = async (req, res) => {
     const body = req.body.user;
-    console.log(body);
     if (!body.firstname || !body.surname || !body.username || !body.email || !body.password || !body.confirmPassword || !body.country || !body.city || !body.birthday ) {
         return res.status(400).send({message : "Veuillez remplir tout les champs."});
     }

@@ -9,10 +9,19 @@ const handleLogin = async (req, res) => {
     const { user } = req.body;
     const username = user.username;
     const password = user.password;
-    if (!username || !password) return res.status(400).json({ 'message': 'Please fill all inputs.' });
+    if (!username  || !password) return res.status(400).json({ 'message': 'Please fill all inputs.' });
 
-    const foundUser = await User.findOne({username: username}).exec();
-    if(foundUser === null) return res.status(401).json({message: 'Password or username incorect'}); //Unauthorized
+    let foundUser = await User.findOne({
+        $or: [
+            { username: username },
+            { email: username }
+        ]
+    }).exec();
+
+    if (!foundUser) {
+        return res.status(400).json({ message: "Mot de passe ou le nom d'utilisateur incorrect" });
+    }
+
 
     // evaluate password
     const match = bcrypt.compare(password, foundUser.password).then( async (result) => {
@@ -22,8 +31,7 @@ const handleLogin = async (req, res) => {
             }
             const roles = Object.values(foundUser.roles).filter(Boolean);
 
-            const accessToken = jwt.sign(
-                {
+            const accessToken = jwt.sign({
                     "UserInfo": {
                         "username": foundUser.username,
                         "roles": roles
@@ -32,8 +40,8 @@ const handleLogin = async (req, res) => {
                 process.env.ACCESS_TOKEN_SECRET,
                 { expiresIn: '10s'}
             );
-            const newRefreshToken = jwt.sign(
-                { "username": foundUser.username },
+            const newRefreshToken = jwt.sign({
+                    "username": foundUser.username },
                 process.env.REFRESH_TOKEN_SECRET,
                 { expiresIn: '1d'}
             );
@@ -66,7 +74,11 @@ const handleLogin = async (req, res) => {
             foundUser.refreshToken = [...newRefreshTokenArray, newRefreshToken];
             const result = await foundUser.save();
             res.cookie('jwt', newRefreshToken, { httpOnly: true, secure: true, maxAge: 24 * 60 * 60 * 1000 });
-            return res.status(200).json({ accessToken });
+            if(user.username === "default") {
+                return res.status(200).json({ accessToken, message: "NO_USERNAME"  });
+            } else {
+                return res.status(200).json({ accessToken});
+            }
         } else {
             return res.status(401).json({message: 'Mot de passe ou le nom d\'utilisateur incorrect'});
         }
