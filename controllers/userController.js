@@ -265,7 +265,7 @@ async function setUser(req, res) {
 
 async function getAllUsers(req, res) {
     try {
-        const users = await User.find({}, 'firstname surname username email').exec(); // Utilisez la projection pour sélectionner les champs
+        const users = await User.find({}, 'firstname surname username email').exec();
         res.status(200).json(users);
     } catch (error) {
         console.error("Erreur lors de la récupération des utilisateurs: ", error);
@@ -273,4 +273,15 @@ async function getAllUsers(req, res) {
     }
 }
 
-module.exports = { edit, getById, files, emailVerification, resendEmailVerification, resetPassword, newPassword, deleteUser, getInfo, setUser, getAllUsers };
+async function getUserById(req, res) {
+    const id = req.params.id;
+    console.log(id);
+    const user = await User.findOne({ _id: id }).select('-password').populate('files').exec();
+    if (!user) {
+        return res.status(400).send({message: "Utilisateur introuvable."});
+    }
+    return res.status(200).send(user);
+
+}
+
+module.exports = { edit, files, emailVerification, resendEmailVerification, resetPassword, newPassword, deleteUser, getInfo, setUser, getAllUsers, getUserById };

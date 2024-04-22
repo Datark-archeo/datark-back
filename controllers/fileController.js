@@ -1,117 +1,127 @@
 const FileModel = require("../models/file.model")
 const Version = require("../models/version.model")
+const Persee = require("../models/persee.model")
 const fs = require('fs');
+const crypto = require('crypto');
 const path = require('path');
 const User = require('../models/user.model');
 const Throttle = require('throttle');
 const {transporter} = require('../utils/nodemailer');
-async function  upload(req, res)  {
+const bcrypt = require("bcrypt");
+async function upload(req, res) {
+    let { name, description, date_creation, pactolsLieux, pactolsSujets, coOwnersIds, invitedCoAuthors } = req.body;
 
-    let {name, description, date_creation, pactolsLieux, coOwnersMail} = req.body
     if (!req.username) {
-        return res.status(400).send({message : "Utilisateur non trouvé."});
+        return res.status(400).send({ message: "Utilisateur non trouvé." });
     }
 
-    if (!name || !description|| !date_creation || !pactolsLieux || !pactolsSujets) {
-        return res.status(400).send({message : "Veuillez remplir tout les champs."});
+    if (!name || !description || !date_creation || !pactolsLieux || !pactolsSujets) {
+        return res.status(400).send({ message: "Veuillez remplir tous les champs." });
     }
 
-    const file = await FileModel.findOne({name: name }).exec();
-    if (file !== null) {
-        return res.status(400).send({message : "Le nom du fichier est déjà utilisé."});
-    }
-    const fileData = req.files.file;
-    const files = req.files;
-
-    if (!fileData) {
-        return res.status(400).send({message : "Aucun fichier n'a été envoyé."});
-    }
-
-    if(fileData.mimetype !== 'application/pdf') {
-        return res.status(400).send({message : "Le fichier doit être au format PDF."});
-    }
-
-    const fileName = fileData.name;
-    const dir = path.join(__dirname, '../users/' + req.username + `/files/${fileName}`);
-    if (!fs.existsSync(dir)){
-        fs.mkdirSync(dir, {recursive: true}, err => {
-            console.error(err)
-        });
-    } else {
-        return res.status(400).send({message : "Le fichier existe déjà."});
-    }
-
-    Object.keys(files).forEach(key => {
-        const filepath = path.join(__dirname, `files/${req.username}`, files[key].name)
-        files[key].mv(filepath, (err) => {
-            if (err) return res.status(500).json({ status: "error", message: err })
-        })
-    });
-
-    //save file
-    const filePath = dir + '/' + fileName;
-
-    pactolsSujets = JSON.parse(pactolsSujets);
-    pactolsLieux = JSON.parse(pactolsLieux);
-    const lieux = pactolsLieux.map(lieu => lieu.identifier);
-    const sujets = pactolsSujets.map(sujet => sujet.identifier);
-    let date = date_creation.split('T')[0];
-    date += 'T00:00:00.000Z';
-    fileData.mv(filePath, function(err) {
-        if (err) {
-            return res.status(500).send({message : "Erreur lors de l'upload du fichier."});
+    try {
+        const existingFile = await FileModel.findOne({ name: name }).exec();
+        if (existingFile) {
+            return res.status(400).send({ message: "Le nom du fichier est déjà utilisé." });
         }
-    });
-    // recherchez les coOwners par email si pas trouvé, créer un compte avec un mot de passe aléatoire et envoyer un email d'invitation
-    let coOwners = [];
-    if(coOwnersMail) {
-        coOwnersMail.split(',').map(async email => {
-            let coOwner = await User.find({email: email}).exec();
-            if(!coOwner) {
-                const randomPassword = Math.random().toString(36).slice(-8);
-                coOwner = await User.create({email: email, password: randomPassword, username: 'default'});
-                transporter.sendMail({
-                    from: '"Datark invitation" <no-reply@datark.com>',
-                    to: email,
-                    subject: 'Invitation à rejoindre Datark',
-                    html: `<p>Bonjour,</p>
-                            <p>Vous avez été invité à rejoindre Datark pour collaborer sur un fichier.</p>
-                            <p>Votre mot de passe temporaire est : ${randomPassword}</p>
-                            <p>Connectez-vous à votre compte afin de compléter votre profile.</p>
-                            <a href="${process.env.FRONTEND_URL}/login">Se connecter</a>
-                            <p>Lien: ${process.env.FRONTEND_URL}/login </p>
-                            <p>Cordialement,</p>
-                            <p>L'équipe Datark</p>`
-                });
-            } else {
-                coOwners.push(coOwner);
-            }
-        });
-    }
-    User.findOne({'username': req.username}).exec().then(async user => {
+
+        const fileData = req.files.file;
+
+        if (!fileData) {
+            return res.status(400).send({ message: "Aucun fichier n'a été envoyé." });
+        }
+
+        if (fileData.mimetype !== 'application/pdf') {
+            return res.status(400).send({ message: "Le fichier doit être au format PDF." });
+        }
+
+        const dir = path.join(__dirname, `../users/${req.username}/files`);
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
+
+        const filePath = path.join(dir, fileData.name);
+
+        if (fs.existsSync(filePath)) {
+            return res.status(400).send({ message: "Le fichier existe déjà." });
+        }
+
+        await fileData.mv(filePath);
+        pactolsLieux = JSON.parse(pactolsLieux);
+        pactolsSujets = JSON.parse(pactolsSujets);
+        const lieuxIdentifiers = pactolsLieux.map(lieu => lieu.identifier);
+        const sujetsIdentifiers = pactolsSujets.map(sujet => sujet.identifier);
+
+        let user = await User.findOne({ username: req.username }).exec();
         if (!user) {
-            return res.status(400).send({message : "Utilisateur non trouvé."});
+            return res.status(400).send({ message: "Utilisateur non trouvé." });
         }
+
         const newFile = await FileModel.create({
-            name: name,
-            description: description,
-            date_publication: date,
-            file_name: fileName,
-            pactolsLieux: lieux, // Ajout de pactolsLieux
-            pactolsSujets: sujets, // Ajout de pactolsSujets
-            owner: user._id // Ajustez selon la façon dont vous gérez l'association de l'utilisateur
+            name,
+            description,
+            date_publication: new Date(date_creation).toISOString(),
+            file_name: fileData.name,
+            pactolsLieux: lieuxIdentifiers,
+            pactolsSujets: sujetsIdentifiers,
+            owner: user._id
         });
+
         user.files.push(newFile._id);
         await user.save();
-        if(coOwners.length > 0) {
-            coOwners.forEach(coOwner => {
-                coOwner.files.push(newFile._id);
-                newFile.coOwners.push(coOwner._id);
-                coOwner.save();
-            });
+        if (coOwnersIds) {
+            coOwnersIds = JSON.parse(coOwnersIds);
+            coOwners = await Promise.all(coOwnersIds.map(_id => User.findOne({ _id: _id })));
+            if(coOwners.length !== 0) {
+                for (const coOwner of coOwners) {
+                    newFile.coOwners.push(coOwner._id);
+                    coOwner.files.push(newFile._id);
+                    await coOwner.save();
+                }
+            }
         }
-        return res.status(200).send({message : "Le fichier a bien été créé.", file: newFile});
-    });
+        if (invitedCoAuthors) {
+            invitedCoAuthors = JSON.parse(invitedCoAuthors);
+            for(const invitedCoAuthor of invitedCoAuthors) {
+                const invitedUser = await User.findOne({ email: invitedCoAuthor.email });
+                if (!invitedUser) {
+                    let randomPassword = crypto.randomBytes(32).toString('hex');
+                    const salt = await bcrypt.genSalt(10);
+                    const hashedPassword = await bcrypt.hash(randomPassword, salt);
+                    const coOnwers = await User.create({
+                        email: invitedCoAuthor.email,
+                        firstname: invitedCoAuthor.firstname,
+                        surname: invitedCoAuthor.surname,
+                        password: hashedPassword,
+                        username: 'default',
+                        files: [newFile._id]
+                    });
+                    newFile.coOwners.push(coOnwers._id);
+                    await newFile.save();
+
+                    transporter.sendMail({
+                        from: '"Datark invitation" <no-reply@datark.com>',
+                        to: email,
+                        subject: 'Invitation à rejoindre Datark',
+                        html: `<p>Bonjour,</p>
+                            <p>Vous avez été invité à rejoindre Datark pour collaborer sur un fichier.</p>
+                            <p>Votre mot de passe temporaire est : ${randomPassword}</p>
+                            <p>Connectez-vous avec votre email : ${invitedCoAuthor.email}, afin de compléter votre profile.</p>
+                            <a href="${process.env.FRONTEND_URL}/login">Se connecter</a>
+                            <p>Lien: <a href="${process.env.FRONTEND_URL}/login">${process.env.FRONTEND_URL}/login</a></p>
+                            <p>Cordialement,</p>
+                            <p>L'équipe Datark</p>`
+                    });
+
+                }
+            }
+        }
+
+        res.status(200).send({ message: "Le fichier a bien été créé.", file: newFile });
+    } catch (error) {
+        console.error('Error during file upload:', error);
+        res.status(500).send({ message: "Erreur serveur." });
+    }
 }
 
 async function getAll(req, res) {
@@ -229,7 +239,7 @@ async function searchFiles(req, res) {
 
     try {
         // Recherche dans les champs spécifiés pour tout match avec la chaîne de recherche
-        const searchResult = await FileModel.find({
+        const searchResults = await FileModel.find({
             $or: [
                 { name: { $regex: searchString, $options: 'i' } },  // Recherche insensible à la casse dans le nom
                 { description: { $regex: searchString, $options: 'i' } },  // Recherche dans la description
@@ -237,9 +247,21 @@ async function searchFiles(req, res) {
                 { pactolsLieux: { $in: [searchString] } },  // Recherche dans le tableau pactolsLieux
                 { pactolsSujets: { $in: [searchString] } }  // Recherche dans le tableau pactolsSujets
             ]
-        }).populate('owner', 'name');  // Populate pour inclure le nom de l'auteur depuis le document de l'utilisateur
+        }).populate('owner', 'name').lean();  // Populate pour inclure le nom de l'auteur depuis le document de l'utilisateur
+        const perseeResults = await Persee.find({
+            $or: [
+                { name: { $regex: searchString, $options: 'i' } },
+                { description: { $regex: searchString, $options: 'i' } },
+                { owner: { $regex: searchString, $options: 'i' } },
+        ]});
 
-        return res.status(200).json(searchResult);
+        const transformedResults = perseeResults.map(result => {
+            const newResult = { ...result, perseeOwner: result.owner };
+            delete newResult.owner;
+            return newResult;
+        });
+        const combinedResults = [...searchResults, ...transformedResults];
+        return res.status(200).json(combinedResults);
     } catch (error) {
         console.error(error);
         return res.status(500).send({ message: "Erreur lors de la recherche des fichiers.", error });
@@ -271,26 +293,37 @@ async function searchComplexFiles(req, res) {
 
     // Filtrage par liste de pactolsLieux
     if (pactolsLieux) {
-        const lieux = pactolsLieux.split(','); // Supposons que pactolsLieux soit une chaîne de caractères de lieux séparés par des virgules
-        searchFilter.pactolsLieux = { $all: lieux };
+        searchFilter.pactolsLieux = { $in: pactolsLieux.split(',') };
     }
 
     // Filtrage par liste de pactolsSujets
     if (pactolsSujets) {
-        const sujets = pactolsSujets.split(','); // Supposons que pactolsSujets soit une chaîne de caractères de sujets séparés par des virgules
-        searchFilter.pactolsSujets = { $all: sujets };
+        searchFilter.pactolsSujets = { $in: pactolsSujets.split(',') };
     }
 
     try {
         // Exécution de la requête de recherche avec les filtres construits
-        const searchResult = await FileModel.find(searchFilter).populate('owner');
+        const searchResults = await FileModel.find(searchFilter).populate('owner').lean();
 
-        return res.status(200).json(searchResult);
+        const perseeResults = await Persee.find({
+            $or: [
+                { date_publication: { $gte: datePublicationStart, $lte: datePublicationEnd } },
+            ]
+        }).lean(); // Utilisez `.lean()` pour obtenir des objets JavaScript simples.
+
+        const transformedResults = perseeResults.map(result => {
+            const newResult = { ...result, perseeOwner: result.owner };
+            delete newResult.owner;
+            return newResult;
+        });
+        const combinedResults = [...searchResults, ...transformedResults];
+        return res.status(200).json(combinedResults);
     } catch (error) {
         console.error(error);
         return res.status(500).send({ message: "Erreur lors de la recherche des fichiers.", error });
     }
 }
+
 
 async function getUsersWithFiles(req, res) {
     const files = await FileModel.find({}).lean();

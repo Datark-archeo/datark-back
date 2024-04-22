@@ -9,7 +9,7 @@ async function sendInvitation  (req, res){
     try {
         const invitationToken = jwt.sign(
             { recipientEmail, senderUsername },
-            process.env.JWT_SECRET,
+            process.env.ACCESS_TOKEN_SECRET,
             { expiresIn: '24h' }
         );
 
@@ -35,7 +35,7 @@ async function acceptInvitation (req, res) {
     const { token } = req.query;
     if(!token) return res.status(400).json({ error: 'Token manquant' });
     try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET, async (err, decoded) => {
+        const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, async (err, decoded) => {
             if (err) return null;
             if(decoded && decoded.recipientEmail && decoded.senderUsername) {
                 return decoded;
