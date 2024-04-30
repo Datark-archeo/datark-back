@@ -6,9 +6,8 @@ const MessageSchema = new mongoose.Schema({
         required: true
     },
     sender: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
-        required: true
+       type: String,
+        required: true,
     },
     conversation: {
         type: mongoose.Schema.Types.ObjectId,

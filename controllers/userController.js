@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const transporter = require('../utils/nodemailer');
+const Conversation = require("../models/conversation.model");
 require('dotenv').config();
 
 
@@ -273,4 +274,45 @@ async function getAllUsers(req, res) {
     }
 }
 
-module.exports = { edit, getById, files, emailVerification, resendEmailVerification, resetPassword, newPassword, deleteUser, getInfo, setUser, getAllUsers };
+
+async function createConversation(req, res) {
+    const { participants } = req.body;
+    let participantsObj = JSON.parse(participants);
+    console.log(participantsObj);
+    if (!participantsObj || participantsObj.length < 2) {
+        return res.status(400).json({ message: "La conversation doit avoir au moins deux participants" });
+    }
+    const userIds = [];
+    for (const participant of participantsObj) {
+        const user = await User.findOne({username: participant}).exec();
+        if (!user) {
+            return res.status(400).json({ message: `L'utilisateur avec l'ID ${participant} n'existe pas` });
+        }
+        userIds.push(user._id);
+    }
+    try {
+        const newConversation = await Conversation.create({ participants: userIds });
+        res.status(201).json(newConversation);
+    } catch (error) {
+        console.error("Erreur lors de la création de la conversation: ", error);
+        res.status(500).json({ message: "Erreur lors de la création de la conversation" });
+    }
+
+}
+
+async function getAllConversation(req, res) {
+    const username = req.username;
+    try {
+        const user = await User.findOne({ username: username }).exec();
+        if (!user) {
+            return res.status(400).json({ message: "Utilisateur non trouvé" });
+        }
+        const conversations = await Conversation.find({ 'participants': { $in: [user._id] } }).populate(['participants', 'messages']).exec();
+        res.status(200).json(conversations);
+    } catch (error) {
+        console.error("Erreur lors de la récupération des conversations: ", error);
+        res.status(500).json({ message: "Erreur lors de la récupération des conversations" });
+    }
+}
+
+module.exports = { edit, getById, files, emailVerification, resendEmailVerification, resetPassword, newPassword, deleteUser, getInfo, setUser, getAllUsers, createConversation, getAllConversation };

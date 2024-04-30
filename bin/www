@@ -12,9 +12,8 @@ const setupSocketHandlers = require('../controllers/socketController');
  * Get port from environment and store in Express.
  */
 
-var port = normalizePort(process.env.PORT || '3000');
-const PORT = '3000'
-app.set('port', port);
+const PORT = normalizePort(process.env.PORT || '3000');
+app.set('port', PORT);
 
 /**
  * Create HTTP server.

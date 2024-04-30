@@ -7,43 +7,44 @@ function setupSocketHandlers(io) {
     io.on('connection', async (socket) => {
         console.log('Un utilisateur se connecte');
         const token = socket.handshake.query.token;
-        try {
-            let userInfo = null
-            jwt.verify(
-                token,
-                process.env.ACCESS_TOKEN_SECRET,
-                (err, decoded) => {
-                    if (err) {
-                        socket.emit('authentication_error', 'Token invalide');
-                        socket.disconnect();
-                        return;
-                    }
-                    if(decoded && decoded.UserInfo && decoded.UserInfo.username) {
-                        userInfo = {
-                            username: decoded.UserInfo.username,
-                            roles: decoded.UserInfo.roles
-                        }
-                    } else {
-                        socket.emit('authentication_error', 'Informations d’utilisateur manquantes dans le token');
-                        socket.disconnect();
-                    }
-                }
-            );
-
-           const user = await User.findOne({ username: userInfo.username }).populate('subscription').exec();
-           if(!user) {
-                socket.emit('authentication_error', 'Utilisateur non trouvé');
-                socket.disconnect();
-           } else if (user.subscription === null) {
-                socket.emit('no-subscription', 'Vous devez être abonné pour utiliser le chat.');
-                socket.disconnect();
-           }
-           console.log('Utilisateur abonné et connecté');
-        } catch (error) {
-            socket.emit('authentication_error', 'Erreur d’authentification.');
-            socket.disconnect();
-        }
+        // try {
+        //     let userInfo = null
+        //     jwt.verify(
+        //         token,
+        //         process.env.ACCESS_TOKEN_SECRET,
+        //         (err, decoded) => {
+        //             if (err) {
+        //                 socket.emit('authentication_error', 'Token invalide');
+        //                 socket.disconnect();
+        //                 return;
+        //             }
+        //             if(decoded && decoded.UserInfo && decoded.UserInfo.username) {
+        //                 userInfo = {
+        //                     username: decoded.UserInfo.username,
+        //                     roles: decoded.UserInfo.roles
+        //                 }
+        //             } else {
+        //                 socket.emit('authentication_error', 'Informations d’utilisateur manquantes dans le token');
+        //                 socket.disconnect();
+        //             }
+        //         }
+        //     );
+        //
+        //    const user = await User.findOne({ username: userInfo.username }).populate('subscription').exec();
+        //    if(!user) {
+        //         socket.emit('authentication_error', 'Utilisateur non trouvé');
+        //         socket.disconnect();
+        //    } else if (user.subscription === null) {
+        //         socket.emit('no-subscription', 'Vous devez être abonné pour utiliser le chat.');
+        //         socket.disconnect();
+        //    }
+        //    console.log('Utilisateur abonné et connecté');
+        // } catch (error) {
+        //     socket.emit('authentication_error', 'Erreur d’authentification.');
+        //     socket.disconnect();
+        // }
         socket.on('sendMessage', async (data) => {
+            console.log('data', data);
             try {
                 const user = await User.findOne({ username: data.username }).populate(['followers','following']).exec();
                 const conversation = await Conversation.findOne({ _id: data.conversationId }).populate('participants').exec();
@@ -59,20 +60,23 @@ function setupSocketHandlers(io) {
                     return;
                 }
 
-                const otherParticipants = conversation.participants.filter(participant => !participant._id.equals(user._id));
-                const followsAllParticipants = otherParticipants.every(participant => user.following.some(following => following._id.equals(participant._id)));
-                if (!followsAllParticipants) {
-                    socket.emit('error', 'Utilisateur ou conversation introuvable')
-                    console.warn('L’utilisateur ne suit pas tous les participants.');
-                    return;
-                }
-
-                const message = Message.create({
+                const message = await Message.create({
                     content: data.content,
-                    sender: user._id,
+                    sender: user.username,
                     conversation: conversation._id
                 });
-                io.emit('receiveMessage', data);
+                conversation.messages.push(message);
+                await conversation.save();
+
+                const response = {
+                    _id: message._id,
+                    sender: user.username,
+                    participants: conversation.participants.map(participant => participant.username),
+                    content: data.content,
+                    conversationId: conversation._id
+                }
+
+                io.emit('receiveMessage', response);
             } catch (error) {
                 socket.emit('error', 'Utilisateur ou conversation introuvable')
                 console.error('Erreur de sauvegarde du message', error);

@@ -9,6 +9,8 @@ const cookieParser = require('cookie-parser');
 const credentials = require('./middleware/credentials');
 const mongoose = require('mongoose');
 const connectDB = require('./utils/dbConnection');
+const {Server} = require("socket.io");
+const setupSocketHandlers = require("./controllers/socketController");
 const PORT = process.env.PORT || 3500;
 
 //connect to DB
@@ -16,6 +18,8 @@ connectDB();
 
 // custom middleware logger
 app.use(logger);
+
+
 
 
 // Handle options credentials check - before CORS!

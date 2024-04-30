@@ -11,7 +11,7 @@ socket.on("connect", () => {
     console.log("Connecté au serveur WebSocket!");
 
     // Envoyer un message de test
-    socket.emit("sendMessage", { user: "testUser", text: "Hello, World!" });
+    socket.emit("sendMessage", { username: "Nogaruki", content: "Hello, World!", conversationId: '662e81c6356c3176a81ab1f5' });
 });
 
 socket.on("receiveMessage", (message) => {

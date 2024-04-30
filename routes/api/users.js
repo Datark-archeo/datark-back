@@ -4,6 +4,7 @@ const userController = require('../../controllers/userController');
 const invitationController = require('../../controllers/invitationController');
 const verifyJWT = require('../../middleware/verifyJWT');
 
+
 router.route('/')
     .get(verifyJWT, userController.getInfo)
     .put(verifyJWT, userController.edit)
@@ -18,6 +19,9 @@ router.route('/verify')
 router.route('/resend')
     .get(userController.resendEmailVerification);
 
+router.route('/get-conversations')
+    .get(verifyJWT, userController.getAllConversation)
+
 router.route('/reset-password')
     .post(userController.resetPassword);
 
@@ -29,6 +33,9 @@ router.route('/send-invitation')
 
 router.route('/accept-invitation')
     .post(invitationController.acceptInvitation);
+
+router.route('/create-conversation')
+    .post(userController.createConversation);
 
 router.route('/setUser')
     .post(userController.setUser);
