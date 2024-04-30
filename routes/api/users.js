@@ -10,6 +10,9 @@ router.route('/')
     .put(verifyJWT, userController.edit)
     .delete(verifyJWT, userController.deleteUser);
 
+router.route('/profile/:id')
+    .get(userController.getUserById);
+
 router.route('/files')
     .get(verifyJWT, userController.files);
 

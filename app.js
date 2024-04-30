@@ -52,6 +52,8 @@ if (!process.env.ACCESS_TOKEN_SECRET) {
     throw new Error('GOOGLE_REFRESH_TOKEN is not defined');
 } else if (!process.env.GOOGLE_EMAIL) {
     throw new Error('GOOGLE_EMAIL is not defined');
+} else if(!process.env.FRONTEND_URL) {
+    throw new Error('FRONTEND_URL is not defined');
 }
 
 const prefix = '/api';
