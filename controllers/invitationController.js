@@ -4,8 +4,14 @@ const jwt = require('jsonwebtoken');
 const User = require("../models/user.model");
 
 async function sendInvitation  (req, res){
-    const { recipientEmail, senderUsername } = req.body;
+    const {recipientEmail}  = req.body;
+    const senderUsername = req.username;
+    const userEmail = await User.findOne({ email: recipientEmail }).exec();
+    const user = await User.findOne({ username: senderUsername }).populate('contacts').exec();
+    if(!userEmail || !user) return res.status(400).json({ error: 'Utilisateur introuvable' });
 
+    if(userEmail.username === senderUsername) return res.status(400).json({ error: 'Impossible de s’inviter soi-même' });
+    if(user.contacts.some(user => user.username.equals(userEmail.username) )) return res.status(400).json({ error: 'Vous êtes déjà en contact' });
     try {
         const invitationToken = jwt.sign(
             { recipientEmail, senderUsername },

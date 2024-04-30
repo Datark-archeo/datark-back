@@ -1,3 +1,4 @@
+
 const User = require("../models/user.model");
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
@@ -263,7 +264,6 @@ async function setUser(req, res) {
 
 }
 
-
 async function getAllUsers(req, res) {
     try {
         const users = await User.find({}, 'firstname surname username email').exec();
@@ -274,14 +274,14 @@ async function getAllUsers(req, res) {
     }
 }
 
-
 async function createConversation(req, res) {
     const { participants } = req.body;
+    const username = req.username;
     let participantsObj = JSON.parse(participants);
-    console.log(participantsObj);
-    if (!participantsObj || participantsObj.length < 2) {
-        return res.status(400).json({ message: "La conversation doit avoir au moins deux participants" });
+    if (!participantsObj ) {
+        return res.status(400).json({ message: "Erreur aucun participant" });
     }
+    participantsObj.push(username);
     const userIds = [];
     for (const participant of participantsObj) {
         const user = await User.findOne({username: participant}).exec();
@@ -315,11 +315,14 @@ async function getAllConversation(req, res) {
     }
 }
 
-module.exports = { edit, getById, files, emailVerification, resendEmailVerification, resetPassword, newPassword, deleteUser, getInfo, setUser, getAllUsers, createConversation, getAllConversation };
 async function getUserById(req, res) {
     const id = req.params.id;
     console.log(id);
-    const user = await User.findOne({ _id: id }).select('-password').populate('files').exec();
+    const user = await User.findOne({ _id: id }).select('-password')
+        .populate('files')
+        .populate({
+            path: 'contacts',
+        select: 'username'}).exec();
     if (!user) {
         return res.status(400).send({message: "Utilisateur introuvable."});
     }
@@ -327,4 +330,26 @@ async function getUserById(req, res) {
 
 }
 
-module.exports = { edit, files, emailVerification, resendEmailVerification, resetPassword, newPassword, deleteUser, getInfo, setUser, getAllUsers, getUserById };
+async function getContacts(req, res) {
+    const username = req.username;
+    try {
+        const user = await User.findOne({ username: username })
+            .populate({
+                path: 'contacts',
+                select: 'firstname surname username'
+            })
+            .exec();
+        if (!user) {
+            return res.status(400).json({ message: "Utilisateur non trouvé" });
+        }
+        res.status(200).json(user.contacts);
+
+    } catch (error) {
+        console.error("Erreur lors de la récupération des contacts: ", error);
+        res.status(500).json({message: "Erreur lors de la récupération des contacts"});
+    }
+
+}
+
+module.exports = { edit, getUserById, files, emailVerification, resendEmailVerification, resetPassword, newPassword, deleteUser, getInfo, setUser, getAllUsers, createConversation, getAllConversation, getContacts };
+
