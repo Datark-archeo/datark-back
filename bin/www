@@ -8,7 +8,7 @@ const debug = require('debug')('datark-back:server');
 const http = require('http');
 const { Server } = require("socket.io");
 const setupSocketHandlers = require('../controllers/socketController');
-const fkill = require("fkill");
+const { exec } = require('child_process');
 /**
  * Get port from environment and store in Express.
  */
@@ -75,15 +75,16 @@ function onError(error) {
     case 'EADDRINUSE':
       console.error(bind + ' is already in use');
       // Kill the process using port 3000
-      fkill(':3000')
-          .then(() => {
-            // Start the server again
-            server.listen(PORT);
-          })
-          .catch((err) => {
-            console.error('Error while killing the process:', err);
-            process.exit(1);
-          });
+      exec('lsof -ti:3000 | xargs kill -9', (err, stdout, stderr) => {
+        if (err) {
+          console.error('Error while killing the process:', err);
+          process.exit(1);
+        } else {
+          console.log('Process using port 3000 has been killed.');
+          // Start the server again
+          server.listen(PORT);
+        }
+      });
       break;
     default:
       throw error;

@@ -19,7 +19,6 @@
     "dotenv": "^16.3.1",
     "express": "~4.16.1",
     "express-fileupload": "^1.4.1",
-    "fkill": "^9.0.0",
     "fs": "^0.0.1-security",
     "googleapis": "^133.0.0",
     "jsonwebtoken": "^9.0.2",
