@@ -243,24 +243,35 @@ async function searchFiles(req, res) {
             $or: [
                 { name: { $regex: searchString, $options: 'i' } },  // Recherche insensible à la casse dans le nom
                 { description: { $regex: searchString, $options: 'i' } },  // Recherche dans la description
-                { 'owner.name': { $regex: searchString, $options: 'i' } },  // Recherche dans le nom de l'auteur, suppose que vous avez un champ `name` dans le document de l'auteur
+                { 'owner.firstname': { $regex: searchString, $options: 'i' } },  // Recherche dans le nom de l'auteur, suppose que vous avez un champ `name` dans le document de l'auteur
+                { 'owner.lastname': { $regex: searchString, $options: 'i' } },  // Recherche dans le nom de l'auteur, suppose que vous avez un champ `name` dans le document de l'auteur
                 { pactolsLieux: { $in: [searchString] } },  // Recherche dans le tableau pactolsLieux
                 { pactolsSujets: { $in: [searchString] } }  // Recherche dans le tableau pactolsSujets
             ]
-        }).populate('owner', 'name').lean();  // Populate pour inclure le nom de l'auteur depuis le document de l'utilisateur
+        }).populate('owner', 'firstname lastname').lean();  // Populate pour inclure le nom de l'auteur depuis le document de l'utilisateur
         const perseeResults = await Persee.find({
             $or: [
                 { name: { $regex: searchString, $options: 'i' } },
                 { description: { $regex: searchString, $options: 'i' } },
                 { owner: { $regex: searchString, $options: 'i' } },
-        ]});
+            ]
+        }).lean();
 
         const transformedResults = perseeResults.map(result => {
-            const newResult = { ...result, perseeOwner: result.owner };
-            delete newResult.owner;
-            return newResult;
+            return {
+                _id: result._id.toString(),  // Convertir ObjectId en chaîne
+                name: result.name,
+                description: result.description,
+                date_publication: result.date_publication,
+                url: result.url,
+                perseeOwner: result.owner.join(', '),  // Convertir le tableau en chaîne
+                createdAt: result.createdAt,
+                updatedAt: result.updatedAt
+                // Ajoutez d'autres propriétés si nécessaire
+            };
         });
         const combinedResults = [...searchResults, ...transformedResults];
+        console.log(combinedResults[0]);
         return res.status(200).json(combinedResults);
     } catch (error) {
         console.error(error);
@@ -312,9 +323,17 @@ async function searchComplexFiles(req, res) {
         }).lean(); // Utilisez `.lean()` pour obtenir des objets JavaScript simples.
 
         const transformedResults = perseeResults.map(result => {
-            const newResult = { ...result, perseeOwner: result.owner };
-            delete newResult.owner;
-            return newResult;
+            return {
+                _id: result._id.toString(),  // Convertir ObjectId en chaîne
+                name: result.name,
+                description: result.description,
+                date_publication: result.date_publication,
+                url: result.url,
+                perseeOwner: result.owner.join(', '),  // Convertir le tableau en chaîne
+                createdAt: result.createdAt,
+                updatedAt: result.updatedAt
+                // Ajoutez d'autres propriétés si nécessaire
+            };
         });
         const combinedResults = [...searchResults, ...transformedResults];
         return res.status(200).json(combinedResults);
