@@ -8,6 +8,7 @@ const debug = require('debug')('datark-back:server');
 const http = require('http');
 const { Server } = require("socket.io");
 const setupSocketHandlers = require('../controllers/socketController');
+const fkill = require("fkill");
 /**
  * Get port from environment and store in Express.
  */
@@ -62,8 +63,8 @@ function onError(error) {
   }
 
   var bind = typeof port === 'string'
-    ? 'Pipe ' + PORT
-    : 'Port ' + PORT;
+      ? 'Pipe ' + PORT
+      : 'Port ' + PORT;
 
   // handle specific listen errors with friendly messages
   switch (error.code) {
@@ -73,7 +74,16 @@ function onError(error) {
       break;
     case 'EADDRINUSE':
       console.error(bind + ' is already in use');
-      process.exit(1);
+      // Kill the process using port 3000
+      fkill(':3000')
+          .then(() => {
+            // Start the server again
+            server.listen(PORT);
+          })
+          .catch((err) => {
+            console.error('Error while killing the process:', err);
+            process.exit(1);
+          });
       break;
     default:
       throw error;
