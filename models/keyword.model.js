@@ -21,6 +21,6 @@ const KeywordSchema = new mongoose.Schema({
     timestamps: true,
 });
 
-const Subscribe = mongoose.model('Keyword', KeywordSchema);
+const Keyword = mongoose.model('Keyword', KeywordSchema);
 
-module.exports = Subscribe;
+module.exports = Keyword;

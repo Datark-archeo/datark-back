@@ -3,27 +3,16 @@
 /**
  * Module dependencies.
  */
+const PORT = process.env.PORT || '3000';
 const app = require('../app');
 const debug = require('debug')('datark-back:server');
 const http = require('http');
-const { Server } = require("socket.io");
-const setupSocketHandlers = require('../controllers/socketController');
-const { exec } = require('child_process');
-/**
- * Get port from environment and store in Express.
- */
-
-const PORT = normalizePort(process.env.PORT || '3000');
-app.set('port', PORT);
 
 /**
  * Create HTTP server.
  */
 
 const server = http.createServer(app);
-
-const io = new Server(server);
-setupSocketHandlers(io); // Configuration des gestionnaires d'événements Socket.IO
 
 /**
  * Listen on provided port, on all network interfaces.
@@ -38,7 +27,7 @@ server.on('listening', onListening);
  */
 
 function normalizePort(val) {
-  var port = parseInt(val, 10);
+  const port = parseInt(val, 10);
 
   if (isNaN(port)) {
     // named pipe
@@ -62,7 +51,7 @@ function onError(error) {
     throw error;
   }
 
-  var bind = typeof port === 'string'
+  const bind = typeof port === 'string'
       ? 'Pipe ' + PORT
       : 'Port ' + PORT;
 
@@ -74,20 +63,8 @@ function onError(error) {
       break;
     case 'EADDRINUSE':
       console.error(bind + ' is already in use');
-      // Kill the process using port 3000
-      exec('lsof -ti:3000 | xargs kill -9', (err, stdout, stderr) => {
-        if (err) {
-          console.error('Error while killing the process:', err);
-          process.exit(1);
-        } else {
-          console.log('Process using port 3000 has been killed.');
-          // Start the server again
-          server.listen(PORT);
-        }
-      });
+      process.exit(1);
       break;
-    default:
-      throw error;
   }
 }
 

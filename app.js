@@ -8,19 +8,15 @@ const errorHandler = require('./middleware/errorHandler');
 const cookieParser = require('cookie-parser');
 const credentials = require('./middleware/credentials');
 const mongoose = require('mongoose');
-const connectDB = require('./utils/dbConnection');
-const {Server} = require("socket.io");
-const setupSocketHandlers = require("./controllers/socketController");
-const PORT = process.env.PORT || 3500;
+const connectDB = require("./utils/dbConnection");
+/**
+ * Get port from environment and store in Express.
+ */
 
-//connect to DB
-connectDB();
+const PORT = process.env.PORT || '3500';
+app.set('port', PORT);
 
-// custom middleware logger
 app.use(logger);
-
-
-
 
 // Handle options credentials check - before CORS!
 // and fetch cookies credentials requirement
@@ -65,12 +61,14 @@ app.use(prefix + '/logout', require('./routes/logout'));
 app.use(prefix +'/user', require('./routes/api/users'));
 app.use(prefix +'/file', require('./routes/api/files'));
 app.use(prefix +'/pactols', require('./routes/api/pactols'));
-
 app.use(errorHandler);
+
+connectDB();
 
 mongoose.connection.once('open', () => {
     console.log('MongoDB is Connected...');
-    app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+    app.listen(app.get('port'), () => console.log(`Server running on port ${PORT}`));
 });
+
 
 module.exports = app;

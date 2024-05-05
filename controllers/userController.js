@@ -5,6 +5,7 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const transporter = require('../utils/nodemailer');
 const Conversation = require("../models/conversation.model");
+const Message = require("../models/message.model");
 require('dotenv').config();
 
 
