@@ -6,13 +6,17 @@
 const PORT = process.env.PORT || '3000';
 const app = require('../app');
 const debug = require('debug')('datark-back:server');
+const setupSocketHandlers = require('../controllers/socketController');
 const http = require('http');
+const {Server} = require("socket.io");
 
 /**
  * Create HTTP server.
  */
 
 const server = http.createServer(app);
+const io = new Server(server);
+setupSocketHandlers(io);
 
 /**
  * Listen on provided port, on all network interfaces.
