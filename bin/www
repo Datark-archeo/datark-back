@@ -15,7 +15,14 @@ const {Server} = require("socket.io");
  */
 
 const server = http.createServer(app);
-const io = new Server(server);
+const io = new Server(server, {
+  cors: {
+    origin: "https://preprod.datark.fr",  // Spécifiez explicitement l'origine autorisée
+    methods: ["GET", "POST"],  // Méthodes HTTP autorisées pour CORS
+    credentials: true,  // Autorise les cookies CORS et les en-têtes d'autorisation
+    allowedHeaders: ["Content-Type", "Authorization"]  // En-têtes autorisés dans les requêtes CORS
+  }
+});
 setupSocketHandlers(io);
 
 /**
