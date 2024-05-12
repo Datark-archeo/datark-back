@@ -1,37 +1,14 @@
 const Message = require('../models/message.model');
 const jwt = require('jsonwebtoken');
 const User = require("../models/user.model");
-const Subscribe = require("../models/subscription.model");
 const Conversation = require("../models/conversation.model"); // Assurez-vous d'avoir un modèle Conversation pour MongoDB
+const verifyJWTForSocket = require('../middleware/socketVerifyJWT');
 function setupSocketHandlers(io) {
     console.log('Configuration des gestionnaires d’événements Socket.IO');
-    io.on('connection', async (socket) => {
+    io.use(verifyJWTForSocket).on('connection', async (socket) => {
         console.log('Un utilisateur se connecte');
-        const token = socket.handshake.auth.token;
         try {
-            let userInfo = null
-            jwt.verify(
-                token,
-                process.env.ACCESS_TOKEN_SECRET,
-                (err, decoded) => {
-                    if (err) {
-                        console.error('Erreur de vérification du token');
-                        socket.emit('authentication_error', 'Token invalide');
-                        socket.disconnect();
-                        return;
-                    }
-                    if(decoded && decoded.UserInfo && decoded.UserInfo.username) {
-                        userInfo = {
-                            username: decoded.UserInfo.username,
-                            roles: decoded.UserInfo.roles
-                        }
-                    } else {
-                        socket.emit('authentication_error', 'Informations d’utilisateur manquantes dans le token');
-                        socket.disconnect();
-                    }
-                }
-            );
-           const user = await User.findOne({ username: userInfo.username }).populate('subscription').exec();
+           const user = await User.findOne({ username: socket.username }).exec();
            if(!user) {
                 socket.emit('authentication_error', 'Utilisateur non trouvé');
                 socket.disconnect();
