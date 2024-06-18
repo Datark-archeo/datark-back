@@ -86,6 +86,14 @@ const UserSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User'
     }],
+    profilePicture: {
+        type: String,
+        default: null
+    },
+    affiliateUniv:{
+        type: String,
+        default: null
+    },
 }, {
     timestamps: true,  // Ajoute les champs createdAt et updatedAt
 });

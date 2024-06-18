@@ -8,17 +8,22 @@ const User = require('../models/user.model');
 const Throttle = require('throttle');
 const {transporter} = require('../utils/nodemailer');
 const bcrypt = require("bcrypt");
+const axios = require('axios');
+
 async function upload(req, res) {
     let { name, description, date_creation, pactolsLieux, pactolsSujets, coOwnersIds, invitedCoAuthors } = req.body;
 
-    if (!req.username) {
-        return res.status(400).send({ message: "Utilisateur non trouvé." });
-    }
+    // if (!req.username) {
+    //     return res.status(400).send({ message: "Utilisateur non trouvé." });
+    // }
+
+    // const username = req.username;
+    const username = 'Nogaruki';
+
 
     if (!name || !description || !date_creation || !pactolsLieux || !pactolsSujets) {
         return res.status(400).send({ message: "Veuillez remplir tous les champs." });
     }
-
     try {
         const existingFile = await FileModel.findOne({ name: name }).exec();
         if (existingFile) {
@@ -35,7 +40,7 @@ async function upload(req, res) {
             return res.status(400).send({ message: "Le fichier doit être au format PDF." });
         }
 
-        const dir = path.join(__dirname, `../users/${req.username}/files`);
+        const dir = path.join(__dirname, `../users/${username}/files`);
         if (!fs.existsSync(dir)) {
             fs.mkdirSync(dir, { recursive: true });
         }
@@ -46,13 +51,15 @@ async function upload(req, res) {
             return res.status(400).send({ message: "Le fichier existe déjà." });
         }
 
+
         await fileData.mv(filePath);
+
         pactolsLieux = JSON.parse(pactolsLieux);
         pactolsSujets = JSON.parse(pactolsSujets);
         const lieuxIdentifiers = pactolsLieux.map(lieu => lieu.identifier);
         const sujetsIdentifiers = pactolsSujets.map(sujet => sujet.identifier);
 
-        let user = await User.findOne({ username: req.username }).exec();
+        let user = await User.findOne({ username: username }).exec();
         if (!user) {
             return res.status(400).send({ message: "Utilisateur non trouvé." });
         }
@@ -117,7 +124,52 @@ async function upload(req, res) {
             }
         }
 
-        res.status(200).send({ message: "Le fichier a bien été créé.", file: newFile });
+        const apiKey = process.env.COPYLEAKS_API_KEY;
+        const email = process.env.COPYLEAKS_EMAIL;
+
+        console.log('apiKey:', apiKey);
+        console.log('email:', email);
+        await axios.post("https://id.copyleaks.com/v3/account/login/api", {
+            email: email,
+            key: apiKey
+        }, {
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        }).then(async response => {
+            const access_token = response.data.access_token;
+            const fileBuffer = fs.readFileSync(filePath);
+            const base64File = fileBuffer.toString('base64');
+
+            // Préparer et envoyer la requête à Copyleaks
+            const scanId = newFile._id.toString();
+            const copyleaksUrl = `https://api.copyleaks.com/v3/scans/submit/file/${scanId}`;
+            const copyleaksHeaders = {
+                'Authorization': `Bearer ${access_token}`,
+                'Content-Type': 'application/json',
+            };
+            const copyleaksBody = {
+                base64: base64File,
+                filename: fileData.name,
+                properties: {
+                    webhooks: {
+                        status: 'http://localhost:3500/api/webhooks/copyleaks'
+                    }
+                }
+            };
+
+            await axios.put(copyleaksUrl, copyleaksBody, { headers: copyleaksHeaders }).then(response => {
+                console.log('Copyleaks response:', response.data);
+                res.status(200).send({ message: "Le fichier a bien été créé et envoyé à Copyleaks.", file: newFile });
+            }).catch(error => {
+                console.error('Copyleaks error PUT:', error.response ? error.response.data : error.message);
+                return res.status(500).send({ message: "Erreur lors de l'envoi du fichier à Copyleaks." });
+            });
+        }).catch(error => {
+            console.error('Copyleaks error POST :', error.response ? error.response.data : error.message);
+            return res.status(500).send({ message: "Erreur lors de l'envoi du fichier à Copyleaks." });
+        });
+
     } catch (error) {
         console.error('Error during file upload:', error);
         res.status(500).send({ message: "Erreur serveur." });
@@ -143,7 +195,7 @@ async function edit(req, res) {
     console.log(req.body)
     let fileId = req.params.id;
 
-    if (req.username === null) {
+    if (username === null) {
         return res.status(400).send({message : "Utilisateur non trouvé."});
     }
 
@@ -160,7 +212,7 @@ async function edit(req, res) {
         return res.status(400).send({message : "Fichier non trouvé."});
     }
 
-    if (file.owner.username !== req.username) {
+    if (file.owner.username !== username) {
         return res.status(400).send({message : "Vous n'êtes pas le propriétaire du fichier."});
     }
 
@@ -193,7 +245,7 @@ async function edit(req, res) {
     if(isNewVersion) {
         //check if file have already versions
         const versions = await file.getVersions();
-        const dir = path.join(__dirname, '../Users/' + req.username + '/files/' + file.file_name + '/versions');
+        const dir = path.join(__dirname, '../Users/' + username + '/files/' + file.file_name + '/versions');
         if (!fs.existsSync(dir)){
             fs.mkdirSync(dir);
         }
@@ -236,25 +288,34 @@ async function searchFiles(req, res) {
     if (!searchString) {
         return res.status(400).send({ message: "Aucun critère de recherche fourni." });
     }
+    let words = searchString.split(' ');
 
     try {
+        // Construction de la condition de recherche pour chaque mot
+        let searchConditions = words.map(word => ({
+            $or: [
+                { name: { $regex: word, $options: 'i' } },
+                { description: { $regex: word, $options: 'i' } },
+                { 'owner.firstname': { $regex: word, $options: 'i' } },
+                { 'owner.lastname': { $regex: word, $options: 'i' } },
+                { pactolsLieux: { $in: [word] } },
+                { pactolsSujets: { $in: [word] } }
+            ]
+        }));
+
         // Recherche dans les champs spécifiés pour tout match avec la chaîne de recherche
         const searchResults = await FileModel.find({
+            $and: searchConditions
+        }).populate('owner', 'firstname lastname').lean();
+        searchConditions = words.map(word => ({
             $or: [
-                { name: { $regex: searchString, $options: 'i' } },  // Recherche insensible à la casse dans le nom
-                { description: { $regex: searchString, $options: 'i' } },  // Recherche dans la description
-                { 'owner.firstname': { $regex: searchString, $options: 'i' } },  // Recherche dans le nom de l'auteur, suppose que vous avez un champ `name` dans le document de l'auteur
-                { 'owner.lastname': { $regex: searchString, $options: 'i' } },  // Recherche dans le nom de l'auteur, suppose que vous avez un champ `name` dans le document de l'auteur
-                { pactolsLieux: { $in: [searchString] } },  // Recherche dans le tableau pactolsLieux
-                { pactolsSujets: { $in: [searchString] } }  // Recherche dans le tableau pactolsSujets
-            ]
-        }).populate('owner', 'firstname lastname').lean();  // Populate pour inclure le nom de l'auteur depuis le document de l'utilisateur
+                { name: { $regex: word, $options: 'i' } },
+                { description: { $regex: word, $options: 'i' } },
+                { owner: { $regex: word, $options: 'i' } },
+                ]
+        }));
         const perseeResults = await Persee.find({
-            $or: [
-                { name: { $regex: searchString, $options: 'i' } },
-                { description: { $regex: searchString, $options: 'i' } },
-                { owner: { $regex: searchString, $options: 'i' } },
-            ]
+            $and: searchConditions
         }).lean();
 
         const transformedResults = perseeResults.map(result => {
@@ -278,6 +339,7 @@ async function searchFiles(req, res) {
         return res.status(500).send({ message: "Erreur lors de la recherche des fichiers.", error });
     }
 }
+
 
 async function searchComplexFiles(req, res) {
     // Extraction des critères de recherche à partir des paramètres de la requête
@@ -318,7 +380,8 @@ async function searchComplexFiles(req, res) {
 
         const perseeResults = await Persee.find({
             $or: [
-                { date_publication: { $gte: datePublicationStart, $lte: datePublicationEnd } },
+                { date_publication: { $gte: datePublicationStart, $lte: datePublicationEnd },
+                },
             ]
         }).lean(); // Utilisez `.lean()` pour obtenir des objets JavaScript simples.
 
@@ -391,22 +454,29 @@ async function download(req, res) {
         if (err) {
             return res.status(404).send({message: "Fichier non trouvé ou accès refusé."});
         }
-        const year = file.date_publication.getFullYear();
-        const fileName = `${file.owner.name}_${year}.pdf`
-        const throttleRate = isSubscriber ? 1024 * 1024 * 10 : 1024 * 100;
+        file.download.push(new Date());
+        file.save().then(() => {
+            const year = file.date_publication.getFullYear();
+            const fileName = `${file.owner.name}_${year}.pdf`
+            const throttleRate = isSubscriber ? 1024 * 1024 * 10 : 1024 * 100;
 
-        const fileStream = fs.createReadStream(filePath);
-        res.set('Content-disposition', 'attachment; filename=' + fileName);
-        res.set('Content-Type', 'application/pdf');
+            const fileStream = fs.createReadStream(filePath);
+            res.set('Content-disposition', 'attachment; filename=' + fileName);
+            res.set('Content-Type', 'application/pdf');
 
-        const throttle = new Throttle(throttleRate);
+            const throttle = new Throttle(throttleRate);
 
-        fileStream.on('error', (streamErr) => {
-            console.error(streamErr);
-            res.status(500).send({message: "Erreur lors de la lecture du fichier."});
+            fileStream.on('error', (streamErr) => {
+                console.error(streamErr);
+                res.status(500).send({message: "Erreur lors de la lecture du fichier."});
+            });
+
+            fileStream.pipe(throttle).pipe(res);
+        }).catch((err) => {
+            console.error(err);
+            res.status(500).send({message: "Erreur lors de la mise à jour du fichier."});
         });
 
-        fileStream.pipe(throttle).pipe(res);
     });
 }
 

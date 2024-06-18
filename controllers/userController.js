@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const transporter = require('../utils/nodemailer');
 const Conversation = require("../models/conversation.model");
 const Message = require("../models/message.model");
+const FileModel = require("../models/file.model");
 require('dotenv').config();
 
 
@@ -352,5 +353,140 @@ async function getContacts(req, res) {
 
 }
 
-module.exports = { edit, getUserById, files, emailVerification, resendEmailVerification, resetPassword, newPassword, deleteUser, getInfo, setUser, getAllUsers, createConversation, getAllConversation, getContacts };
+function follow(req, res) {
+    const {id} = req.body;
+    const username = req.username;
+    User.findOne({username: username}).exec().then(user => {
+        if (!user) {
+            return res.status(400).send({message: "Utilisateur introuvable."});
+        }
+        User.findOne({_id: id}).exec().then(followedUser => {
+            if (!followedUser) {
+                return res.status(400).send({message: "Utilisateur à suivre introuvable."});
+            }
+            user.following.push(followedUser._id);
+            followedUser.followers.push(user._id);
+            user.save().then(() => {
+                followedUser.save().then(() => {
+                    return res.status(200).send({message: "Utilisateur suivi"});
+                }).catch(err => {
+                    return res.status(400).send({message: "Une erreur est survenue."});
+                });
+            }).catch(err => {
+                return res.status(400).send({message: "Une erreur est survenue."});
+            });
+            return res.status(200).send({message: "Utilisateur suivi"});
+        }).catch(err => {
+            return res.status(400).send({message: "Une erreur est survenue."});
+        });
+    });
+}
+
+function unfollow(req, res) {
+    const {id} = req.body;
+    const username = req.username;
+    User.findOne({username: username}).exec().then(user => {
+        if (!user) {
+            return res.status(400).send({message: "Utilisateur introuvable."});
+        }
+        User.findOne({_id: id}).exec().then(followedUser => {
+            if (!followedUser) {
+                return res.status(400).send({message: "Utilisateur à suivre introuvable."});
+            }
+            user.following = user.following.filter(following => following.toString() !== followedUser._id.toString());
+            followedUser.followers = followedUser.followers.filter(follower => follower.toString() !== user._id.toString());
+            user.save();
+            followedUser.save();
+            return res.status(200).send({message: "Utilisateur non suivi"});
+        }).catch(err => {
+            return res.status(400).send({message: "Une erreur est survenue."});
+        });
+    });
+}
+
+function likeFile(req, res) {
+    const {id} = req.body;
+    const username = req.username;
+    User.findOne({username : username}).exec().then(user => {
+        if (!user) {
+            return res.status(400).send({message: "Utilisateur introuvable."});
+        }
+        FileModel.findOne({_id: id}).exec().then(file => {
+            if (!file) {
+                return res.status(400).send({message: "Fichier introuvable."});
+            }
+            user.likedFiles.push(file._id);
+            file.likedBy.push(user._id);
+            file.likesCount++;
+
+            user.save().then(() => {
+                file.save().then(() => {
+                    return res.status(200).send({message: "Fichier liké"});
+                }).catch(err => {
+                    return res.status(400).send({message: "Une erreur est survenue."});
+                });
+            }).catch(err => {
+                return res.status(400).send({message: "Une erreur est survenue."});
+            });
+            return res.status(200).send({message: "Fichier liké"});
+        });
+    });
+}
+
+function unlikeFile(req, res) {
+    const {id} = req.body;
+    const username = req.username;
+    User.findOne({ username: username }).exec().then(user => {
+        if (!user) {
+            return res.status(400).send({message: "Utilisateur introuvable."});
+        }
+        FileModel.findOne({ _id: id }).exec().then(file => {
+            if (!file) {
+                return res.status(400).send({message: "Fichier introuvable."});
+            }
+            user.likedFiles = user.likedFiles.filter(likedFile => likedFile.toString() !== file._id.toString());
+            file.likes = file.likes.filter(like => like.toString() !== user._id.toString());
+            user.save().then(() => {
+                file.save().then(() => {
+                    return res.status(200).send({message: "Fichier unliké"});
+                }).catch(err => {
+                    return res.status(400).send({message: "Une erreur est survenue."});
+                });
+            }).catch(err => {
+                return res.status(400).send({message: "Une erreur est survenue."});
+            });
+        });
+    });
+}
+
+function removeContact(req, res) {
+    const {id} = req.body;
+    const username = req.username;
+    User.findOne({  username: username }).exec().then(user => {
+        if (!user) {
+            return res.status(400).send({message: "Utilisateur introuvable."});
+        }
+        User.findOne ({ _id: id }).exec().then(contact => {
+            if (!contact) {
+                return res.status(400).send({message: "Contact introuvable."});
+            }
+            user.contacts = user.contacts.filter(contact => contact.toString() !== id);
+            user.save().then(() => {
+                contact.contacts = contact.contacts.filter(contact => contact.toString() !== user._id.toString());
+                contact.save().then(() => {
+                    return res.status(200).send({message: "Contact supprimé"});
+                }).catch(err => {
+                    return res.status(400).send({message: "Une erreur est survenue."});
+                });
+            }).catch(err => {
+                return res.status(400).send({message: "Une erreur est survenue."});
+            });
+
+        });
+    });
+}
+
+module.exports = { edit, getUserById, files, emailVerification, resendEmailVerification,
+    resetPassword, newPassword, deleteUser, getInfo, setUser, getAllUsers, createConversation,
+    getAllConversation, getContacts, follow, unfollow, likeFile, unlikeFile, removeContact };
 

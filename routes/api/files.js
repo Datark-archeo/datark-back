@@ -16,7 +16,6 @@ router.route('/user')
 
 router.route('/upload',)
     .post([
-        verifyJWT,
         fileUpload({ createParentPath: true }),
         filesPayloadExists,
         fileExtLimiter(['.pdf']),

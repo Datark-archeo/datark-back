@@ -13,7 +13,7 @@ async function main () {
         set:'persee:doc',
     })
     let index = 0;
-    let max =1142675;
+    let max = 1142675;
     fs.writeFileSync(path.join(__dirname, 'oai-pmh.json'), '');
     for await (const record of recordIterator) {
         let oai_dc_dc = record.metadata['oai_dc:dc'];

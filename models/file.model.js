@@ -49,6 +49,16 @@ const FileSchema = new mongoose.Schema({
             type: String,
         }
     ],
+    download: [
+        {
+            type: Date,
+        }
+    ],
+    status: {
+        type: String,
+        enum: ['in_review', 'valid', 'invalid', 'not_reviewed'],
+        default: 'in_review'
+    },
 }, {
     timestamps: true,  // Ceci ajoutera des champs pour le moment de la création et de la modification
 });

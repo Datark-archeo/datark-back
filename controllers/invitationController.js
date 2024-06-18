@@ -65,4 +65,5 @@ async function acceptInvitation (req, res) {
     }
 }
 
+
 module.exports = { sendInvitation, acceptInvitation };
