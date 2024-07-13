@@ -10,16 +10,59 @@ const {transporter} = require('../utils/nodemailer');
 const bcrypt = require("bcrypt");
 const axios = require('axios');
 
+/**
+ * @swagger
+ * components:
+ *   schemas:
+ *     File:
+ *       type: object
+ *       properties:
+ *         name:
+ *           type: string
+ *         description:
+ *           type: string
+ *         date_publication:
+ *           type: string
+ *           format: date
+ *         file_name:
+ *           type: string
+ *         pactolsLieux:
+ *           type: array
+ *           items:
+ *             type: string
+ *         pactolsSujets:
+ *           type: array
+ *           items:
+ *             type: string
+ *         owner:
+ *           $ref: '#/components/schemas/User'
+ *         coOwners:
+ *           type: array
+ *           items:
+ *             $ref: '#/components/schemas/User'
+ *     User:
+ *       type: object
+ *       properties:
+ *         _id:
+ *           type: string
+ *         firstname:
+ *           type: string
+ *         surname:
+ *           type: string
+ *         username:
+ *           type: string
+ *         email:
+ *           type: string
+ */
+
 async function upload(req, res) {
     let { name, description, date_creation, pactolsLieux, pactolsSujets, coOwnersIds, invitedCoAuthors } = req.body;
 
-    // if (!req.username) {
-    //     return res.status(400).send({ message: "Utilisateur non trouvé." });
-    // }
+    if (!req.username) {
+        return res.status(400).send({ message: "Utilisateur non trouvé." });
+    }
 
-    // const username = req.username;
-    const username = 'Nogaruki';
-
+    const username = req.username;
 
     if (!name || !description || !date_creation || !pactolsLieux || !pactolsSujets) {
         return res.status(400).send({ message: "Veuillez remplir tous les champs." });
@@ -51,7 +94,6 @@ async function upload(req, res) {
             return res.status(400).send({ message: "Le fichier existe déjà." });
         }
 
-
         await fileData.mv(filePath);
 
         pactolsLieux = JSON.parse(pactolsLieux);
@@ -76,6 +118,7 @@ async function upload(req, res) {
 
         user.files.push(newFile._id);
         await user.save();
+
         if (coOwnersIds) {
             coOwnersIds = JSON.parse(coOwnersIds);
             coOwners = await Promise.all(coOwnersIds.map(_id => User.findOne({ _id: _id })));
@@ -87,6 +130,7 @@ async function upload(req, res) {
                 }
             }
         }
+
         if (invitedCoAuthors) {
             invitedCoAuthors = JSON.parse(invitedCoAuthors);
             for(const invitedCoAuthor of invitedCoAuthors) {
@@ -108,7 +152,7 @@ async function upload(req, res) {
 
                     transporter.sendMail({
                         from: '"Datark invitation" <no-reply@datark.com>',
-                        to: email,
+                        to: invitedCoAuthor.email,
                         subject: 'Invitation à rejoindre Datark',
                         html: `<p>Bonjour,</p>
                             <p>Vous avez été invité à rejoindre Datark pour collaborer sur un fichier.</p>
@@ -119,7 +163,6 @@ async function upload(req, res) {
                             <p>Cordialement,</p>
                             <p>L'équipe Datark</p>`
                     });
-
                 }
             }
         }
@@ -127,8 +170,7 @@ async function upload(req, res) {
         const apiKey = process.env.COPYLEAKS_API_KEY;
         const email = process.env.COPYLEAKS_EMAIL;
 
-        console.log('apiKey:', apiKey);
-        console.log('email:', email);
+
         await axios.post("https://id.copyleaks.com/v3/account/login/api", {
             email: email,
             key: apiKey
@@ -138,22 +180,64 @@ async function upload(req, res) {
             }
         }).then(async response => {
             const access_token = response.data.access_token;
-            const fileBuffer = fs.readFileSync(filePath);
-            const base64File = fileBuffer.toString('base64');
 
-            // Préparer et envoyer la requête à Copyleaks
-            const scanId = newFile._id.toString();
-            const copyleaksUrl = `https://api.copyleaks.com/v3/scans/submit/file/${scanId}`;
+            const dataBuffer = fs.readFileSync(filePath);
+            const data = await pdfParse(dataBuffer);
+            const numPages = data.numpages;
+
+            const selectPages = (numPages) => {
+                let pages = [];
+                if (numPages <= 10) pages = [2, 4, 7];
+                else if (numPages <= 25) pages = [13, 16, 19];
+                else if (numPages <= 50) pages = [22, 32, 42];
+                else if (numPages <= 100) pages = [20, 40, 60];
+                else if (numPages <= 150) pages = [40, 80, 130];
+                else if (numPages <= 200) pages = [50, 100, 150];
+                else if (numPages <= 300) pages = [50, 150, 250];
+                else if (numPages <= 400) pages = [150, 250, 300];
+                else if (numPages <= 500) pages = [80, 180, 300];
+                else pages = [80, 180, 300]; // For more than 500 pages
+
+                return pages.filter(page => page <= numPages);
+                // Explication détaillé de  pages.filter(page => page <= numPages); :
+                // page est un élément du tableau pages, et on ne garde que les éléments inférieurs ou égaux à numPages
+                // numPages est le nombre total de pages du document PDF
+                // SI numPages <= 10, on garde les pages 2, 4 et 7
+                // Mais que le docs a 5 pages, on garde les pages 2 et 4
+            };
+
+            const selectedPages = selectPages(numPages);
+
+            // Charger le document PDF d'origine
+            const pdfDoc = await PDFDocument.load(dataBuffer);
+            // Créer un nouveau document PDF
+            const newPdfDoc = await PDFDocument.create();
+
+            // Copier les pages sélectionnées dans le nouveau document PDF
+            for (const pageNum of selectedPages) {
+                if (pageNum <= numPages) {
+                    const [copiedPage] = await newPdfDoc.copyPages(pdfDoc, [pageNum - 1]);
+                    newPdfDoc.addPage(copiedPage);
+                }
+            }
+
+            // Sauvegarder le nouveau document PDF
+            const newPdfBytes = await newPdfDoc.save();
+            const newPdfBase64 = Buffer.from(newPdfBytes).toString('base64');
+
+            const copyleaksUrl = `https://api.copyleaks.com/v3/scans/submit/file/${newFile._id}`;
             const copyleaksHeaders = {
                 'Authorization': `Bearer ${access_token}`,
                 'Content-Type': 'application/json',
             };
             const copyleaksBody = {
-                base64: base64File,
+                base64: newPdfBase64,
                 filename: fileData.name,
+                sandbox: true,
+                aiGeneratedText: true,
                 properties: {
                     webhooks: {
-                        status: 'http://localhost:3500/api/webhooks/copyleaks'
+                        status: process.env.BACKEND_URL+'/api/webhooks/copyleaks'
                     }
                 }
             };
@@ -177,7 +261,11 @@ async function upload(req, res) {
 }
 
 async function getAll(req, res) {
-    const files = await FileModel.find({}).populate('owner').populate('coOwners').exec();
+    const files = await FileModel.find({})
+        .select('-webhookData')  // Exclude the webhookData field
+        .populate('owner')
+        .populate('coOwners')
+        .exec();
     return res.status(200).send(files);
 }
 
@@ -203,7 +291,7 @@ async function edit(req, res) {
         return res.status(400).send({message : "Veuillez remplir au moins un champ."});
     }
 
-        isNewVersion === 'true' ? isNewVersion = true : isNewVersion = false;
+    isNewVersion === 'true' ? isNewVersion = true : isNewVersion = false;
     wantRewrite === 'true' ? wantRewrite = true : wantRewrite = false;
 
     const file = await FileModel.findOne({ _id: fileId }).populate('owner').exec();
@@ -312,7 +400,7 @@ async function searchFiles(req, res) {
                 { name: { $regex: word, $options: 'i' } },
                 { description: { $regex: word, $options: 'i' } },
                 { owner: { $regex: word, $options: 'i' } },
-                ]
+            ]
         }));
         const perseeResults = await Persee.find({
             $and: searchConditions
@@ -339,7 +427,6 @@ async function searchFiles(req, res) {
         return res.status(500).send({ message: "Erreur lors de la recherche des fichiers.", error });
     }
 }
-
 
 async function searchComplexFiles(req, res) {
     // Extraction des critères de recherche à partir des paramètres de la requête
@@ -405,7 +492,6 @@ async function searchComplexFiles(req, res) {
         return res.status(500).send({ message: "Erreur lors de la recherche des fichiers.", error });
     }
 }
-
 
 async function getUsersWithFiles(req, res) {
     const files = await FileModel.find({}).lean();
@@ -499,5 +585,4 @@ async function deleteFile(req, res) {
     return res.status(200).send({message : "Le fichier a bien été supprimé."});
 }
 
-
-module.exports = { upload, getAll, getById, edit, searchFiles, searchComplexFiles, download, deleteFile, getUsersWithFiles};
+module.exports = { upload, getAll, getById, edit, searchFiles, searchComplexFiles, download, deleteFile, getUsersWithFiles };

@@ -3,7 +3,61 @@ const bcrypt = require('bcrypt');
 
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
+/**
+ * @swagger
+ * components:
+ *   responses:
+ *     BadRequest:
+ *       description: Bad request
+ *     Unauthorized:
+ *       description: Unauthorized
+ *     InternalServerError:
+ *       description: Internal server error
+ */
 
+/**
+ * @swagger
+ * /auth:
+ *   post:
+ *     summary: Log in a user
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               user:
+ *                 type: object
+ *                 properties:
+ *                   username:
+ *                     type: string
+ *                     example: "username or email"
+ *                   password:
+ *                     type: string
+ *                     example: "password"
+ *     responses:
+ *       200:
+ *         description: Successfully logged in
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 accessToken:
+ *                   type: string
+ *                 username:
+ *                   type: string
+ *                 message:
+ *                   type: string
+ *       400:
+ *         $ref: '#/components/responses/BadRequest'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
+ */
 const handleLogin = async (req, res) => {
     const cookies = req.cookies;
     const { user } = req.body;

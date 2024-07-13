@@ -1,34 +1,74 @@
+const mongoose = require('mongoose');
+const File = require('../models/file.model');
 
+async function copyleaksWebhook(req, res) {
+    const {
+        status,
+        scanId,
+        completionTime,
+        totalWords,
+        totalCopiedWords,
+        credits,
+        error,
+        developerPayload,
+        scannedDocument,
+        results,
+        downloadableReport,
+        notifications
+    } = req.body;
 
-function copyleaksWebhook(req, res) {
-    const { status, scanId, completionTime, totalWords, totalCopiedWords, credits, results } = req.body;
-    console.log('Webhook received:', req.body);
-    // Gérer le webhook en fonction du statut reçu
-    if (status === 'completed') {
-        // Traitement pour un scan complété
-        console.log(`Scan ID: ${scanId} is completed.`);
-        console.log(`Completion Time: ${completionTime}`);
-        console.log(`Total Words: ${totalWords}`);
-        console.log(`Total Copied Words: ${totalCopiedWords}`);
-        console.log(`Credits used: ${credits}`);
-        console.log('Results:', results);
+    try {
+        let updateData;
 
-        // Effectuer des actions supplémentaires, par exemple, mettre à jour la base de données
+        if (status === 'completed') {
+            if (scannedDocument && !mongoose.Types.ObjectId.isValid(scannedDocument.scanId)) {
+                return res.status(400).send({ message: 'Invalid scanId.' });
+            }
 
+            const scanId = scannedDocument.scanId;
 
-    } else if (status === 'error') {
-        // Traitement pour une erreur de scan
-        console.error(`Scan ID: ${scanId} encountered an error.`);
-        // Gérer l'erreur, par exemple, notifier l'utilisateur ou réessayer
-    } else if (status === 'creditsChecked') {
-        // Traitement pour un contrôle des crédits
-        console.log(`Credits checked for Scan ID: ${scanId}.`);
-    } else if (status === 'indexed') {
-        // Traitement pour un document indexé
-        console.log(`Scan ID: ${scanId} has been indexed.`);
+            updateData = {
+                webhookData: {
+                    status,
+                    developerPayload,
+                    scannedDocument,
+                    results,
+                    downloadableReport,
+                    notifications
+                }
+            };
+
+            console.log(`Webhook data for Scan ID: ${scanId} has been saved.`);
+        } else if (status === 'error') {
+            updateData = {
+                webhookData: {
+                    status,
+                    developerPayload,
+                    error
+                }
+            };
+
+            console.error(`Scan ID: ${scanId} encountered an error: ${error.message}`);
+        } else if (status === 'creditsChecked') {
+            console.log(`Credits checked for Scan ID: ${scanId}.`);
+        } else if (status === 'indexed') {
+            console.log(`Scan ID: ${scanId} has been indexed.`);
+        }
+
+        if (updateData && scanId) {
+            // Mise à jour ou création de l'entrée dans la base de données pour le fichier scanné
+            const file = await File.findByIdAndUpdate(
+                scanId,
+                updateData,
+                { new: true, upsert: true }
+            );
+        }
+
+        res.status(200).send({ message: 'Webhook received successfully.' });
+    } catch (err) {
+        console.error(`Error saving webhook data for Scan ID: ${scanId}:`, err);
+        res.status(500).send({ message: 'Error saving webhook data.' });
     }
-
-    res.status(200).send({ message: 'Webhook received successfully.' });
 }
 
 module.exports = { copyleaksWebhook };

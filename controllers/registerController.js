@@ -2,6 +2,60 @@ const User = require('../models/user.model');
 const crypto = require('crypto');
 const bcrypt = require('bcrypt');
 const transporter = require('../utils/nodemailer');
+
+/**
+ * @swagger
+ * components:
+ *   schemas:
+ *     User:
+ *       type: object
+ *       required:
+ *         - firstname
+ *         - surname
+ *         - username
+ *         - email
+ *         - password
+ *         - confirmPassword
+ *         - country
+ *         - city
+ *         - birthday
+ *       properties:
+ *         firstname:
+ *           type: string
+ *         surname:
+ *           type: string
+ *         username:
+ *           type: string
+ *         email:
+ *           type: string
+ *           format: email
+ *         password:
+ *           type: string
+ *           format: password
+ *         confirmPassword:
+ *           type: string
+ *           format: password
+ *         country:
+ *           type: string
+ *         city:
+ *           type: string
+ *         birthday:
+ *           type: string
+ *           format: date
+ */
+
+/**
+ * @swagger
+ * components:
+ *   responses:
+ *     UserCreated:
+ *       description: The user was successfully created
+ *     UserConflict:
+ *       description: The username or email is already in use
+ *     BadRequest:
+ *       description: Invalid input
+ */
+
 const handleNewUser = async (req, res) => {
     const body = req.body.user;
     if (!body.firstname || !body.surname || !body.username || !body.email || !body.password || !body.confirmPassword || !body.country || !body.city || !body.birthday ) {

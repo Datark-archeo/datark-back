@@ -1,4 +1,3 @@
-
 const User = require("../models/user.model");
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
@@ -9,15 +8,113 @@ const Message = require("../models/message.model");
 const FileModel = require("../models/file.model");
 require('dotenv').config();
 
+/**
+ * @swagger
+ * components:
+ *   schemas:
+ *     User:
+ *       type: object
+ *       required:
+ *         - firstname
+ *         - surname
+ *         - username
+ *         - email
+ *         - password
+ *         - confirmPassword
+ *         - country
+ *         - city
+ *         - birthday
+ *       properties:
+ *         firstname:
+ *           type: string
+ *         surname:
+ *           type: string
+ *         username:
+ *           type: string
+ *         email:
+ *           type: string
+ *         password:
+ *           type: string
+ *         confirmPassword:
+ *           type: string
+ *         country:
+ *           type: string
+ *         city:
+ *           type: string
+ *         birthday:
+ *           type: string
+ *           format: date
+ */
 
+/**
+ * @swagger
+ * components:
+ *   responses:
+ *     BadRequest:
+ *       description: Bad request
+ *     Unauthorized:
+ *       description: Unauthorized
+ *     NotFound:
+ *       description: User not found
+ *     InternalServerError:
+ *       description: Internal server error
+ */
+
+/**
+ * @swagger
+ * /users:
+ *   get:
+ *     summary: Get user info
+ *     tags: [Users]
+ *     responses:
+ *       200:
+ *         description: Successfully retrieved user info
+ *       400:
+ *         $ref: '#/components/responses/BadRequest'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
+ */
+async function getInfo(req, res) {
+    let username = req.username;
+    let foundedUser = await User.findOne({ $or: [
+            { username: username },
+            { email: username }
+        ]}).populate('downloadedFiles').populate('files');
+    if (!foundedUser) {
+        return res.status(400).json({ "message": `Utilisateur non trouvé` });
+    }
+    return res.status(200).json({ "user": foundedUser });
+}
+
+/**
+ * @swagger
+ * /users:
+ *   put:
+ *     summary: Edit user info
+ *     tags: [Users]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/User'
+ *     responses:
+ *       200:
+ *         description: Successfully edited user info
+ *       400:
+ *         $ref: '#/components/responses/BadRequest'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
+ */
 async function edit(req, res) {
-
-    let body = req.body.user
-
-     if (!body.firstname || !body.surname || !body.country || !body.city || !body.birthday) {
-         return res.status(400).send({message : "At least one input must be filled"});
-     
-     }
+    let body = req.body.user;
+    if (!body.firstname || !body.surname || !body.country || !body.city || !body.birthday) {
+        return res.status(400).send({message : "At least one input must be filled"});
+    }
     const user = await User.findOne( {username: req.username }).exec();
     if (user === null) {
         return res.status(400).send({message : "User not found."});
@@ -34,8 +131,6 @@ async function edit(req, res) {
         user.email = body.newEmail;
     }
 
-    if(body.newUser)
-    
     // Si l'utilisateur veut changer son mot de passe
     if(body.newPassword) {
         if(body.newPassword !== body.confirmPassword){
@@ -48,7 +143,6 @@ async function edit(req, res) {
     // Si l'utilisateur veut changer son nom
     if(body.firstname) {
         user.firstname = body.firstname;
-
     }
 
     // Si l'utilisateur veut changer son prénom
@@ -71,35 +165,86 @@ async function edit(req, res) {
 
     await user.save();
     return res.status(200).send({message : "L'utilisateur a bien été modifié."});
-
-
-
 }
 
-async function getById(req, res) {
-    return User.findOne({_id: req.userId}).exec();
-}
-
-async function getInfo(req, res) {
-    let username = req.username;
-    let foundedUser = await User.findOne({ $or: [
-        { username: username },
-        { email: username }
-        ]}).populate('downloadedFiles').populate('files');
-    if (!foundedUser) {
-        return res.status(400).json({ "message": `Utilisateur non trouvé` });
+/**
+ * @swagger
+ * /users/profile/{id}:
+ *   get:
+ *     summary: Get user by ID
+ *     tags: [Users]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Successfully retrieved user
+ *       400:
+ *         $ref: '#/components/responses/NotFound'
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
+ */
+async function getUserById(req, res) {
+    const id = req.params.id;
+    const user = await User.findOne({ _id: id }).select('-password')
+        .populate('files')
+        .populate({
+            path: 'contacts',
+            select: 'username'
+        }).exec();
+    if (!user) {
+        return res.status(400).send({message: "Utilisateur introuvable."});
     }
-    return res.status(200).json({ "user": foundedUser });
+    return res.status(200).send(user);
 }
 
+/**
+ * @swagger
+ * /users/files:
+ *   get:
+ *     summary: Get user's files
+ *     tags: [Users]
+ *     responses:
+ *       200:
+ *         description: Successfully retrieved user's files
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
+ */
 async function files(req, res) {
     User.findOne({username: req.username}).exec().then(user => {
         user.getFiles().then(files => {
             return res.status(200).send(files);
-        })
+        });
     });
 }
 
+/**
+ * @swagger
+ * /users/verify:
+ *   get:
+ *     summary: Verify user's email
+ *     tags: [Users]
+ *     parameters:
+ *       - in: query
+ *         name: token
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Successfully verified email
+ *       400:
+ *         $ref: '#/components/responses/BadRequest'
+ *       403:
+ *         $ref: '#/components/responses/Unauthorized'
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
+ */
 async function emailVerification(req, res) {
     const token = req.query.token;
     if (!token) {
@@ -121,6 +266,29 @@ async function emailVerification(req, res) {
     return res.status(200).send({message: "Votre adresse email a bien été vérifiée."});
 }
 
+/**
+ * @swagger
+ * /users/reset-password:
+ *   post:
+ *     summary: Reset user's password
+ *     tags: [Users]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               email:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Successfully reset password
+ *       400:
+ *         $ref: '#/components/responses/BadRequest'
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
+ */
 function resetPassword(req, res) {
     try {
         const {email} = req.body;
@@ -155,12 +323,42 @@ function resetPassword(req, res) {
             });
         });
     } catch (error) {
-     console.log(error)
-     return res.status(400).send({message : "Une erreur est survenue."});
+        console.log(error);
+        return res.status(400).send({message : "Une erreur est survenue."});
     }
-
 }
 
+/**
+ * @swagger
+ * /users/new-password:
+ *   post:
+ *     summary: Set a new password
+ *     tags: [Users]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               password:
+ *                 type: string
+ *               confirmPassword:
+ *                 type: string
+ *     parameters:
+ *       - in: query
+ *         name: token
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Successfully set new password
+ *       400:
+ *         $ref: '#/components/responses/BadRequest'
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
+ */
 function newPassword(req, res) {
     const token = req.query.token;
     const body = req.body;
@@ -189,6 +387,20 @@ function newPassword(req, res) {
     });
 }
 
+/**
+ * @swagger
+ * /users/resend:
+ *   get:
+ *     summary: Resend email verification
+ *     tags: [Users]
+ *     responses:
+ *       200:
+ *         description: Successfully resent email verification
+ *       400:
+ *         $ref: '#/components/responses/BadRequest'
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
+ */
 async function resendEmailVerification(req, res) {
     const user = await User.findOne({username: req.username }).exec();
     if (user === null) {
@@ -225,6 +437,20 @@ async function resendEmailVerification(req, res) {
     return res.status(400).send({message : "Une erreur est survenue lors de l'envoi du mail."});
 }
 
+/**
+ * @swagger
+ * /users/delete:
+ *   delete:
+ *     summary: Delete a user
+ *     tags: [Users]
+ *     responses:
+ *       200:
+ *         description: Successfully deleted user
+ *       400:
+ *         $ref: '#/components/responses/NotFound'
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
+ */
 async function deleteUser(req, res) {
     const foundedUser = await User.findOne({ _id: req.body.id}).exec();
     if (!foundedUser) {
@@ -238,6 +464,26 @@ async function deleteUser(req, res) {
     return res.status(200).json({ "message": `Utilisateur supprimé` });
 }
 
+/**
+ * @swagger
+ * /users/setUser:
+ *   post:
+ *     summary: Set user details
+ *     tags: [Users]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/User'
+ *     responses:
+ *       200:
+ *         description: Successfully set user details
+ *       400:
+ *         $ref: '#/components/responses/BadRequest'
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
+ */
 async function setUser(req, res) {
     const { user } = req.body;
     if(!user.username || !user.email || !user.city || !user.country || !user.birthday){
@@ -263,9 +509,20 @@ async function setUser(req, res) {
     await foundUser.save();
 
     return res.status(200).send({message : "L'utilisateur a bien été créé."});
-
 }
 
+/**
+ * @swagger
+ * /users/all:
+ *   get:
+ *     summary: Get all users
+ *     tags: [Users]
+ *     responses:
+ *       200:
+ *         description: Successfully retrieved all users
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
+ */
 async function getAllUsers(req, res) {
     try {
         const users = await User.find({}, 'firstname surname username email').exec();
@@ -276,6 +533,31 @@ async function getAllUsers(req, res) {
     }
 }
 
+/**
+ * @swagger
+ * /users/create-conversation:
+ *   post:
+ *     summary: Create a conversation
+ *     tags: [Users]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               participants:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *     responses:
+ *       201:
+ *         description: Successfully created conversation
+ *       400:
+ *         $ref: '#/components/responses/BadRequest'
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
+ */
 async function createConversation(req, res) {
     const { participants } = req.body;
     const username = req.username;
@@ -299,9 +581,22 @@ async function createConversation(req, res) {
         console.error("Erreur lors de la création de la conversation: ", error);
         res.status(500).json({ message: "Erreur lors de la création de la conversation" });
     }
-
 }
 
+/**
+ * @swagger
+ * /users/get-conversations:
+ *   get:
+ *     summary: Get all user conversations
+ *     tags: [Users]
+ *     responses:
+ *       200:
+ *         description: Successfully retrieved conversations
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
+ */
 async function getAllConversation(req, res) {
     const username = req.username;
     try {
@@ -317,21 +612,20 @@ async function getAllConversation(req, res) {
     }
 }
 
-async function getUserById(req, res) {
-    const id = req.params.id;
-    console.log(id);
-    const user = await User.findOne({ _id: id }).select('-password')
-        .populate('files')
-        .populate({
-            path: 'contacts',
-        select: 'username'}).exec();
-    if (!user) {
-        return res.status(400).send({message: "Utilisateur introuvable."});
-    }
-    return res.status(200).send(user);
-
-}
-
+/**
+ * @swagger
+ * /users/get-contacts:
+ *   get:
+ *     summary: Get user's contacts
+ *     tags: [Users]
+ *     responses:
+ *       200:
+ *         description: Successfully retrieved contacts
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
+ */
 async function getContacts(req, res) {
     const username = req.username;
     try {
@@ -350,9 +644,31 @@ async function getContacts(req, res) {
         console.error("Erreur lors de la récupération des contacts: ", error);
         res.status(500).json({message: "Erreur lors de la récupération des contacts"});
     }
-
 }
 
+/**
+ * @swagger
+ * /users/follow:
+ *   post:
+ *     summary: Follow a user
+ *     tags: [Users]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               id:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Successfully followed user
+ *       400:
+ *         $ref: '#/components/responses/BadRequest'
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
+ */
 function follow(req, res) {
     const {id} = req.body;
     const username = req.username;
@@ -382,6 +698,29 @@ function follow(req, res) {
     });
 }
 
+/**
+ * @swagger
+ * /users/unfollow:
+ *   post:
+ *     summary: Unfollow a user
+ *     tags: [Users]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               id:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Successfully unfollowed user
+ *       400:
+ *         $ref: '#/components/responses/BadRequest'
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
+ */
 function unfollow(req, res) {
     const {id} = req.body;
     const username = req.username;
@@ -404,6 +743,29 @@ function unfollow(req, res) {
     });
 }
 
+/**
+ * @swagger
+ * /users/likeFile:
+ *   post:
+ *     summary: Like a file
+ *     tags: [Users]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               id:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Successfully liked file
+ *       400:
+ *         $ref: '#/components/responses/BadRequest'
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
+ */
 function likeFile(req, res) {
     const {id} = req.body;
     const username = req.username;
@@ -433,6 +795,29 @@ function likeFile(req, res) {
     });
 }
 
+/**
+ * @swagger
+ * /users/unlikeFile:
+ *   post:
+ *     summary: Unlike a file
+ *     tags: [Users]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               id:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Successfully unliked file
+ *       400:
+ *         $ref: '#/components/responses/BadRequest'
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
+ */
 function unlikeFile(req, res) {
     const {id} = req.body;
     const username = req.username;
@@ -459,6 +844,29 @@ function unlikeFile(req, res) {
     });
 }
 
+/**
+ * @swagger
+ * /users/removeContact:
+ *   post:
+ *     summary: Remove a contact
+ *     tags: [Users]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               id:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Successfully removed contact
+ *       400:
+ *         $ref: '#/components/responses/BadRequest'
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
+ */
 function removeContact(req, res) {
     const {id} = req.body;
     const username = req.username;
@@ -486,7 +894,24 @@ function removeContact(req, res) {
     });
 }
 
-module.exports = { edit, getUserById, files, emailVerification, resendEmailVerification,
-    resetPassword, newPassword, deleteUser, getInfo, setUser, getAllUsers, createConversation,
-    getAllConversation, getContacts, follow, unfollow, likeFile, unlikeFile, removeContact };
-
+module.exports = {
+    edit,
+    getUserById,
+    files,
+    emailVerification,
+    resendEmailVerification,
+    resetPassword,
+    newPassword,
+    deleteUser,
+    getInfo,
+    setUser,
+    getAllUsers,
+    createConversation,
+    getAllConversation,
+    getContacts,
+    follow,
+    unfollow,
+    likeFile,
+    unlikeFile,
+    removeContact
+};

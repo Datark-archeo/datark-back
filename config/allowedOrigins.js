@@ -1,6 +1,6 @@
 const allowedOrigins = [
     'https://www.datark.com',
-    'http://localhost',
+    'http://localhost:4200',
     'https://preprod.datark.fr'
 ];
 

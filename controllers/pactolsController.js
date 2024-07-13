@@ -1,3 +1,4 @@
+
 const { DataFactory } = require('rdf-data-factory');
 const factory = new DataFactory();
 const { RdfXmlParser } = require('rdfxml-streaming-parser');
@@ -8,7 +9,57 @@ const Pactols = require('../models/pactols.model');
 const rdfFilePathLieux = path.join(__dirname, '../pactols/pactols_lieux.rdf');
 const rdfFilePathSujets = path.join(__dirname, '../pactols/pactols_sujets_all.rdf');
 
-// Fonction pour parser les fichiers RDF et filtrer les résultats en fonction de la langue
+/**
+ * @swagger
+ * components:
+ *   schemas:
+ *     Pactols:
+ *       type: object
+ *       properties:
+ *         label:
+ *           type: string
+ *           description: The label of the term
+ *         identifier:
+ *           type: string
+ *           description: The identifier of the term
+ *         lang:
+ *           type: string
+ *           description: The language of the term
+ *         type:
+ *           type: string
+ *           description: The type of the term (lieux or sujets)
+ *       example:
+ *         label: Paris
+ *         identifier: 12345
+ *         lang: fr
+ *         type: lieux
+ */
+
+/**
+ * @swagger
+ * /pactols/lieux:
+ *   get:
+ *     summary: Retrieve places based on language
+ *     tags: [Pactols]
+ *     parameters:
+ *       - in: query
+ *         name: lang
+ *         schema:
+ *           type: string
+ *           default: fr
+ *         description: The language of the places
+ *     responses:
+ *       200:
+ *         description: A list of places
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/Pactols'
+ *       500:
+ *         description: Error retrieving places
+ */
 async function getLieux(req, res) {
     const lang = req.query.lang || 'fr';
     try {
@@ -20,6 +71,31 @@ async function getLieux(req, res) {
     }
 }
 
+/**
+ * @swagger
+ * /pactols/sujets:
+ *   get:
+ *     summary: Retrieve subjects based on language
+ *     tags: [Pactols]
+ *     parameters:
+ *       - in: query
+ *         name: lang
+ *         schema:
+ *           type: string
+ *           default: fr
+ *         description: The language of the subjects
+ *     responses:
+ *       200:
+ *         description: A list of subjects
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/Pactols'
+ *       500:
+ *         description: Error retrieving subjects
+ */
 async function getSujets(req, res) {
     const lang = req.query.lang || 'fr';
     try {
@@ -31,6 +107,18 @@ async function getSujets(req, res) {
     }
 }
 
+/**
+ * @swagger
+ * /pactols/mongoDB:
+ *   get:
+ *     summary: Save terms to MongoDB
+ *     tags: [Pactols]
+ *     responses:
+ *       200:
+ *         description: Terms saved to MongoDB
+ *       500:
+ *         description: Error saving terms to MongoDB
+ */
 async function saveToMongoDB(req, res) {
     try {
         // Récupérer la liste des fichiers dans le dossier `./translate`
@@ -69,7 +157,5 @@ async function saveToMongoDB(req, res) {
         res.status(500).send({ message: "Erreur lors de la sauvegarde des termes dans la base de données", error });
     }
 }
-
-
 
 module.exports = { getSujets, getLieux, saveToMongoDB };

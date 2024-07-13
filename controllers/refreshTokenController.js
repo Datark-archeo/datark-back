@@ -2,7 +2,53 @@ const User = require('../models/user.model');
 
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
+/**
+ * @swagger
+ * components:
+ *   responses:
+ *     Unauthorized:
+ *       description: No token provided or token is invalid
+ *     Forbidden:
+ *       description: Token is invalid or user is unauthorized
+ */
 
+/**
+ * @swagger
+ * components:
+ *   securitySchemes:
+ *     cookieAuth:
+ *       type: apiKey
+ *       in: cookie
+ *       name: jwt
+ */
+
+/**
+ * @swagger
+ * /refresh:
+ *   get:
+ *     summary: Refresh the access token
+ *     tags: [RefreshToken]
+ *     security:
+ *       - cookieAuth: []
+ *     responses:
+ *       200:
+ *         description: Access token refreshed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 roles:
+ *                   type: array
+ *                   items:
+ *                     type: string
+ *                 accessToken:
+ *                   type: string
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
+ *       403:
+ *         $ref: '#/components/responses/Forbidden'
+ */
 const handleRefreshToken = async (req, res) => {
     const cookies = req.cookies;
     if (!cookies?.jwt) return res.sendStatus(401);

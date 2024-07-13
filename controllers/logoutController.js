@@ -1,5 +1,26 @@
 const User = require('../models/user.model');
+/**
+ * @swagger
+ * components:
+ *   responses:
+ *     NoContent:
+ *       description: No content
+ *     InternalServerError:
+ *       description: Internal server error
+ */
 
+/**
+ * @swagger
+ * /logout:
+ *   post:
+ *     summary: Logout the user
+ *     tags: [Logout]
+ *     responses:
+ *       204:
+ *         $ref: '#/components/responses/NoContent'
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
+ */
 const handleLogout = async (req, res) => {
     const cookies = req.cookies;
     if (!cookies?.jwt) return res.sendStatus(204); //No content
