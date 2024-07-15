@@ -84,6 +84,7 @@ const handleNewUser = async (req, res) => {
         return res.status(400).send({message : "Les mots de passe ne correspondent pas."});
     }
     try {
+        const profilePicture = body.profilePicture;
         const salt = await bcrypt.genSalt(10);
         body.password = await bcrypt.hash(body.password, salt);
         const token = crypto.randomBytes(32).toString('hex');
@@ -101,7 +102,8 @@ const handleNewUser = async (req, res) => {
             city : body.city,
             birthday : birthday,
             verification_token: token,
-            expire_token: expire_token
+            expire_token: expire_token,
+            profilePicture : profilePicture
         });
 
         const mailOptions = {

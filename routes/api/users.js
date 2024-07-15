@@ -384,4 +384,18 @@ router.route('/accept-invitation')
 router.route('/setUser')
     .post(userController.setUser);
 
+router.route('/follow')
+    .post(verifyJWT, userController.follow);
+
+router.route('/unfollow')
+    .post(verifyJWT, userController.unfollow);
+
+router.route('/unfollow')
+    .post(verifyJWT, userController.unfollow);
+
+router.route('/unlike-file')
+    .post(verifyJWT, userController.unlikeFile);
+
+
+
 module.exports = router;

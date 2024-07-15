@@ -49,7 +49,7 @@ async function trackVisit(req, res) {
         if (!rep) {
             return res.status(500).send('Error tracking visit');
         }
-        res.status(200).send('Visit tracked');
+        res.status(200).json('Visit tracked');
     } catch (error) {
         res.status(500).send('Error tracking visit');
     }

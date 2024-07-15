@@ -271,7 +271,7 @@ async function getAll(req, res) {
 
 async function getById(req, res) {
     const id = req.params.id;
-    const file = await FileModel.findOne({ _id: id  }).populate('owner').exec();
+    const file = await FileModel.findOne({ _id: id  }).populate('owner').populate('likedBy').exec();
     if (file === null) {
         return res.status(400).send({message : "Fichier non trouvé."});
     }
