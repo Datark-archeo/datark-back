@@ -41,7 +41,7 @@ const verifyJWT = require('../../middleware/verifyJWT');
  *                 properties:
  *                   firstname:
  *                     type: string
- *                   surname:
+ *                   lastname:
  *                     type: string
  *                   newEmail:
  *                     type: string
@@ -390,8 +390,8 @@ router.route('/follow')
 router.route('/unfollow')
     .post(verifyJWT, userController.unfollow);
 
-router.route('/unfollow')
-    .post(verifyJWT, userController.unfollow);
+router.route('/like-file')
+    .post(verifyJWT, userController.likeFile);
 
 router.route('/unlike-file')
     .post(verifyJWT, userController.unlikeFile);

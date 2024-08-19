@@ -27,7 +27,7 @@ const registerController = require('../controllers/registerController');
  *                 properties:
  *                   firstname:
  *                     type: string
- *                   surname:
+ *                   lastname:
  *                     type: string
  *                   username:
  *                     type: string

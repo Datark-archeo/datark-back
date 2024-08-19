@@ -11,7 +11,7 @@ const transporter = require('../utils/nodemailer');
  *       type: object
  *       required:
  *         - firstname
- *         - surname
+ *         - lastname
  *         - username
  *         - email
  *         - password
@@ -22,7 +22,7 @@ const transporter = require('../utils/nodemailer');
  *       properties:
  *         firstname:
  *           type: string
- *         surname:
+ *         lastname:
  *           type: string
  *         username:
  *           type: string
@@ -58,7 +58,7 @@ const transporter = require('../utils/nodemailer');
 
 const handleNewUser = async (req, res) => {
     const body = req.body.user;
-    if (!body.firstname || !body.surname || !body.username || !body.email || !body.password || !body.confirmPassword || !body.country || !body.city || !body.birthday ) {
+    if (!body.firstname || !body.lastname || !body.username || !body.email || !body.password || !body.confirmPassword || !body.country || !body.city || !body.birthday ) {
         return res.status(400).send({message : "Veuillez remplir tout les champs."});
     }
     let duplicated = await User.findOne({ username: body.username }).exec();
@@ -92,7 +92,7 @@ const handleNewUser = async (req, res) => {
         expire_token.setHours(expire_token.getHours() + 3);  // Le token expire dans 1 heure
         const result = await User.create({
             firstname: body.firstname,
-            surname : body.surname,
+            lastname : body.lastname,
             lastname : body.lastname,
             username : body.username,
             email : body.email,

@@ -177,7 +177,7 @@ router.route('/edit/:id')
  *         description: Internal server error
  */
 router.route('/search')
-    .get(fileController.searchFiles)
+    .get(isLogin, fileController.searchFiles)
 
 /**
  * @swagger
@@ -192,10 +192,7 @@ router.route('/search')
  *           schema:
  *             type: object
  *             properties:
- *               datePublicationStart:
- *                 type: string
- *                 format: date
- *               datePublicationEnd:
+ *               datePublication:
  *                 type: string
  *                 format: date
  *               ownerId:
@@ -219,7 +216,7 @@ router.route('/search')
  *         description: Internal server error
  */
 router.route('/complexSearch')
-    .post(fileController.searchComplexFiles)
+    .post(isLogin, fileController.searchComplexFiles)
 
 /**
  * @swagger

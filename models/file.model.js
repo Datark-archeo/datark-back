@@ -77,7 +77,8 @@ const FileSchema = new mongoose.Schema({
                 additionalData: String
             }]
         }
-    }
+    },
+    pdfText: String
 }, {
     timestamps: true
 });

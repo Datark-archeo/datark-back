@@ -5,7 +5,7 @@ const UserSchema = new mongoose.Schema({
         type: String,
         required: true
     },
-    surname: {
+    lastname: {
         type: String,
         required: true
     },
@@ -95,6 +95,9 @@ const UserSchema = new mongoose.Schema({
         type: String,
         default: null
     },
+    history: [{
+        type: String,
+    }],
 }, {
     timestamps: true,  // Ajoute les champs createdAt et updatedAt
 });

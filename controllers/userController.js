@@ -16,7 +16,7 @@ require('dotenv').config();
  *       type: object
  *       required:
  *         - firstname
- *         - surname
+ *         - lastname
  *         - username
  *         - email
  *         - password
@@ -27,7 +27,7 @@ require('dotenv').config();
  *       properties:
  *         firstname:
  *           type: string
- *         surname:
+ *         lastname:
  *           type: string
  *         username:
  *           type: string
@@ -85,7 +85,7 @@ async function getInfo(req, res) {
     if (!foundedUser) {
         return res.status(400).json({ "message": `Utilisateur non trouvé` });
     }
-    return res.status(200).json({ "user": foundedUser });
+    return res.status(200).json({ user: foundedUser });
 }
 
 /**
@@ -112,9 +112,10 @@ async function getInfo(req, res) {
  */
 async function edit(req, res) {
     let body = req.body.user;
-    if (!body.firstname || !body.surname || !body.country || !body.city || !body.birthday) {
+    if (!body.firstname || !body.lastname || !body.country || !body.city || !body.birthday) {
         return res.status(400).send({message : "At least one input must be filled"});
     }
+    console.log(body);
     const user = await User.findOne( {username: req.username }).exec();
     if (user === null) {
         return res.status(400).send({message : "User not found."});
@@ -146,8 +147,8 @@ async function edit(req, res) {
     }
 
     // Si l'utilisateur veut changer son prénom
-    if(body.surname) {
-        user.surname = body.surname;
+    if(body.lastname) {
+        user.lastname = body.lastname;
     }
 
     // Si l'utilisateur veut changer son pays
@@ -161,6 +162,11 @@ async function edit(req, res) {
     // Si l'utilisateur veut changer sa date de naissance
     if(body.birthday) {
         user.birthday = body.birthday;
+    }
+
+    // si l'utilisateur veut changer sa photo de profil
+    if(body.profilePicture) {
+        user.profilePicture = body.profilePicture;
     }
 
     await user.save();
@@ -525,7 +531,7 @@ async function setUser(req, res) {
  */
 async function getAllUsers(req, res) {
     try {
-        const users = await User.find({}, 'firstname surname username email').exec();
+        const users = await User.find({}, 'firstname lastname username email').exec();
         res.status(200).json(users);
     } catch (error) {
         console.error("Erreur lors de la récupération des utilisateurs: ", error);
@@ -632,7 +638,7 @@ async function getContacts(req, res) {
         const user = await User.findOne({ username: username })
             .populate({
                 path: 'contacts',
-                select: 'firstname surname username'
+                select: 'firstname lastname username'
             })
             .exec();
         if (!user) {
@@ -761,6 +767,7 @@ function unfollow(req, res) {
  *     responses:
  *       200:
  *         description: Successfully liked file
+ *         user: object
  *       400:
  *         $ref: '#/components/responses/BadRequest'
  *       500:
@@ -783,14 +790,13 @@ function likeFile(req, res) {
 
             user.save().then(() => {
                 file.save().then(() => {
-                    return res.status(200).send({message: "Fichier liké"});
+                    return res.status(200).send({message: "Fichier liké", user: user});
                 }).catch(err => {
                     return res.status(400).send({message: "Une erreur est survenue."});
                 });
             }).catch(err => {
                 return res.status(400).send({message: "Une erreur est survenue."});
             });
-            return res.status(200).send({message: "Fichier liké"});
         });
     });
 }
@@ -813,6 +819,7 @@ function likeFile(req, res) {
  *     responses:
  *       200:
  *         description: Successfully unliked file
+ *         user: object
  *       400:
  *         $ref: '#/components/responses/BadRequest'
  *       500:
@@ -833,7 +840,7 @@ function unlikeFile(req, res) {
             file.likes = file.likes.filter(like => like.toString() !== user._id.toString());
             user.save().then(() => {
                 file.save().then(() => {
-                    return res.status(200).send({message: "Fichier unliké"});
+                    return res.status(200).send({message: "Fichier unliké", user: user});
                 }).catch(err => {
                     return res.status(400).send({message: "Une erreur est survenue."});
                 });

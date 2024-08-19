@@ -49,7 +49,7 @@ async function trackVisit(req, res) {
         if (!rep) {
             return res.status(500).send('Error tracking visit');
         }
-        res.status(200).json('Visit tracked');
+        res.status(200).json({message:'Visit tracked'});
     } catch (error) {
         res.status(500).send('Error tracking visit');
     }
@@ -92,7 +92,7 @@ async function trackSearch(req, res) {
     try {
         const search = new Search({ searchTerm, filters });
         await search.save();
-        res.status(200).send('Search tracked');
+        res.status(200).send({message:'Search tracked'});
     } catch (error) {
         res.status(500).send('Error tracking search');
     }

@@ -9,6 +9,7 @@ const Throttle = require('throttle');
 const {transporter} = require('../utils/nodemailer');
 const bcrypt = require("bcrypt");
 const axios = require('axios');
+const pdfParse = require('pdf-parse')
 
 /**
  * @swagger
@@ -47,7 +48,7 @@ const axios = require('axios');
  *           type: string
  *         firstname:
  *           type: string
- *         surname:
+ *         lastname:
  *           type: string
  *         username:
  *           type: string
@@ -106,6 +107,10 @@ async function upload(req, res) {
             return res.status(400).send({ message: "Utilisateur non trouvé." });
         }
 
+        const dataBuffer = fs.readFileSync(filePath);
+        const pdfData = await pdfParse(dataBuffer);
+        const pdfText = pdfData.text;
+
         const newFile = await FileModel.create({
             name,
             description,
@@ -113,7 +118,8 @@ async function upload(req, res) {
             file_name: fileData.name,
             pactolsLieux: lieuxIdentifiers,
             pactolsSujets: sujetsIdentifiers,
-            owner: user._id
+            owner: user._id,
+            pdfText
         });
 
         user.files.push(newFile._id);
@@ -142,7 +148,7 @@ async function upload(req, res) {
                     const coOnwers = await User.create({
                         email: invitedCoAuthor.email,
                         firstname: invitedCoAuthor.firstname,
-                        surname: invitedCoAuthor.surname,
+                        lastname: invitedCoAuthor.lastname,
                         password: hashedPassword,
                         username: 'default',
                         files: [newFile._id]
@@ -280,7 +286,6 @@ async function getById(req, res) {
 
 async function edit(req, res) {
     let {name, description, date_creation, isNewVersion, wantRewrite, pactolsLieux, pactolsSujets} = req.body
-    console.log(req.body)
     let fileId = req.params.id;
 
     if (username === null) {
@@ -370,58 +375,97 @@ async function edit(req, res) {
 }
 
 async function searchFiles(req, res) {
-    // Récupération de la chaîne de recherche à partir des paramètres de la requête
     const searchString = req.query.q;
+    const page = parseInt(req.query.page) || 1; // Page actuelle, par défaut 1
+    const limit = parseInt(req.query.limit) || 10; // Nombre de résultats par page, par défaut 10
+    const skip = (page - 1) * limit; // Calcul de l'offset
 
     if (!searchString) {
         return res.status(400).send({ message: "Aucun critère de recherche fourni." });
     }
+
     let words = searchString.split(' ');
 
     try {
         // Construction de la condition de recherche pour chaque mot
         let searchConditions = words.map(word => ({
             $or: [
-                { name: { $regex: word, $options: 'i' } },
-                { description: { $regex: word, $options: 'i' } },
-                { 'owner.firstname': { $regex: word, $options: 'i' } },
-                { 'owner.lastname': { $regex: word, $options: 'i' } },
+                { name: new RegExp(word, 'i') }, // Utilisation de RegExp directement
+                { description: new RegExp(word, 'i') },
+                { 'owner.firstname': new RegExp(word, 'i') },
+                { 'owner.lastname': new RegExp(word, 'i') },
                 { pactolsLieux: { $in: [word] } },
-                { pactolsSujets: { $in: [word] } }
+                { pactolsSujets: { $in: [word] } },
+                { pdfText: new RegExp(word, 'i') }
             ]
         }));
 
         // Recherche dans les champs spécifiés pour tout match avec la chaîne de recherche
-        const searchResults = await FileModel.find({
+        const searchResultsPromise = FileModel.find({
             $and: searchConditions
-        }).populate('owner', 'firstname lastname').lean();
-        searchConditions = words.map(word => ({
+        })
+            .populate('owner', 'firstname lastname')
+            .skip(skip) // Pagination: nombre d'éléments à sauter
+            .limit(limit) // Pagination: nombre d'éléments à renvoyer
+            .lean()
+            .exec(); // Assurez-vous que la requête est exécutée
+
+        // Persee conditions, avoiding RegExp for ObjectId fields
+        const perseeConditions = words.map(word => ({
             $or: [
-                { name: { $regex: word, $options: 'i' } },
-                { description: { $regex: word, $options: 'i' } },
-                { owner: { $regex: word, $options: 'i' } },
+                { name: new RegExp(word, 'i') }, // Utilisation de RegExp directement
+                { description: new RegExp(word, 'i') },
+                { owner: word } // Assuming owner is a string in Persee
             ]
         }));
-        const perseeResults = await Persee.find({
-            $and: searchConditions
-        }).lean();
 
-        const transformedResults = perseeResults.map(result => {
-            return {
-                _id: result._id.toString(),  // Convertir ObjectId en chaîne
-                name: result.name,
-                description: result.description,
-                date_publication: result.date_publication,
-                url: result.url,
-                perseeOwner: result.owner.join(', '),  // Convertir le tableau en chaîne
-                createdAt: result.createdAt,
-                updatedAt: result.updatedAt
-                // Ajoutez d'autres propriétés si nécessaire
-            };
-        });
+        const perseeResultsPromise = Persee.find({
+            $and: perseeConditions
+        })
+            .skip(skip) // Pagination: nombre d'éléments à sauter
+            .limit(limit) // Pagination: nombre d'éléments à renvoyer
+            .lean()
+            .exec();
+
+        // Exécution en parallèle des recherches
+        const [searchResults, perseeResults] = await Promise.all([searchResultsPromise, perseeResultsPromise]);
+
+        const transformedResults = perseeResults.map(result => ({
+            _id: result._id.toString(),  // Convertir ObjectId en chaîne
+            name: result.name,
+            description: result.description,
+            date_publication: result.date_publication,
+            url: result.url,
+            status: "valid",
+            perseeOwner: Array.isArray(result.owner) ? result.owner.join(', ') : result.owner,  // Convertir le tableau en chaîne ou utiliser directement
+            createdAt: result.createdAt,
+            updatedAt: result.updatedAt
+        }));
+
         const combinedResults = [...searchResults, ...transformedResults];
-        console.log(combinedResults[0]);
-        return res.status(200).json(combinedResults);
+
+        // Calcul du nombre total d'éléments (sans pagination)
+        const totalItemsPromise = FileModel.countDocuments({ $and: searchConditions });
+        const totalPerseeItemsPromise = Persee.countDocuments({ $and: perseeConditions });
+        const [totalItems, totalPerseeItems] = await Promise.all([totalItemsPromise, totalPerseeItemsPromise]);
+        const totalCombinedItems = totalItems + totalPerseeItems;
+        if(req.username) {
+            // Get User
+            User.findOne({ username: req.username }).exec().then(user => {
+                    if (user) {
+                        user.history.push(req.originalUrl);
+                        user.save();
+                    }
+                }).catch(err => {
+                console.error('Error updating user history:', err);
+            })
+        }
+        return res.status(200).json({
+            files: combinedResults,
+            total: totalCombinedItems, // Nombre total d'éléments sans pagination
+            currentPage: page,
+            totalPages: Math.ceil(totalCombinedItems / limit)
+        });
     } catch (error) {
         console.error(error);
         return res.status(500).send({ message: "Erreur lors de la recherche des fichiers.", error });
@@ -429,21 +473,20 @@ async function searchFiles(req, res) {
 }
 
 async function searchComplexFiles(req, res) {
+
     // Extraction des critères de recherche à partir des paramètres de la requête
-    const { datePublicationStart, datePublicationEnd, ownerId, pactolsLieux, pactolsSujets } = req.query;
+    const { datePublication, ownerId, pactolsLieux, pactolsSujets, searchString } = req.query;
 
     // Construction du filtre de recherche
     let searchFilter = {};
 
     // Filtrage par intervalle de dates de publication
-    if (datePublicationStart || datePublicationEnd) {
-        searchFilter.date_publication = {};
-        if (datePublicationStart) {
-            searchFilter.date_publication.$gte = new Date(datePublicationStart);
-        }
-        if (datePublicationEnd) {
-            searchFilter.date_publication.$lte = new Date(datePublicationEnd);
-        }
+    if (datePublication) {
+        const year = new Date(datePublication).getFullYear();
+        searchFilter.date_publication = {
+            $gte: new Date(`${year}-01-01`),
+            $lte: new Date(`${year}-12-31`)
+        };
     }
 
     // Filtrage par propriétaire (owner)
@@ -462,15 +505,54 @@ async function searchComplexFiles(req, res) {
     }
 
     try {
+
+        let words = searchString ? searchString.split(' ') : [];
+
+        if (words.length > 0) {
+            searchFilter.$or = words.map(word => ({
+                $or: [
+                    { name: { $regex: word, $options: 'i' } },
+                    { description: { $regex: word, $options: 'i' } },
+                    { pdfText: { $regex: word, $options: 'i' } } // Include PDF text in search
+                ]
+            }));
+        }
+
         // Exécution de la requête de recherche avec les filtres construits
         const searchResults = await FileModel.find(searchFilter).populate('owner').lean();
 
+        // Créez un tableau de mots-clés à partir de pactolsLieux et pactolsSujets
+        const pactolWords = [
+            ...(pactolsLieux ? pactolsLieux.split(',') : []),
+            ...(pactolsSujets ? pactolsSujets.split(',') : [])
+        ];
+        const year = datePublication ? new Date(datePublication).getFullYear() : null;
+
+        const perseeConditions = [
+            year ? { $expr: { $eq: [{ $year: "$date_publication" }, year] } } : {},
+            {
+                $or: [
+                    { name: { $in: words } },
+                    { description: { $in: words } },
+                    { owner: { $in: words } }
+                ]
+            }
+        ];
+
+        if (pactolWords.length > 0) {
+            perseeConditions.push({
+                $or: pactolWords.map(word => ({
+                    $or: [
+                        { name: { $regex: word, $options: 'i' } },
+                        { description: { $regex: word, $options: 'i' } }
+                    ]
+                }))
+            });
+        }
+
         const perseeResults = await Persee.find({
-            $or: [
-                { date_publication: { $gte: datePublicationStart, $lte: datePublicationEnd },
-                },
-            ]
-        }).lean(); // Utilisez `.lean()` pour obtenir des objets JavaScript simples.
+            $and: perseeConditions
+        }).lean(); // Utilisation de `.lean()` pour obtenir des objets JavaScript simples.
 
         const transformedResults = perseeResults.map(result => {
             return {
@@ -482,10 +564,22 @@ async function searchComplexFiles(req, res) {
                 perseeOwner: result.owner.join(', '),  // Convertir le tableau en chaîne
                 createdAt: result.createdAt,
                 updatedAt: result.updatedAt
-                // Ajoutez d'autres propriétés si nécessaire
             };
         });
         const combinedResults = [...searchResults, ...transformedResults];
+
+        if(req.username) {
+            // Get User
+            User.findOne({ username: req.username }).exec().then(user => {
+                if (user) {
+                    user.history.push(req.originalUrl);
+                    user.save();
+                }
+            }).catch(err => {
+                console.error('Error updating user history:', err);
+            })
+        }
+
         return res.status(200).json(combinedResults);
     } catch (error) {
         console.error(error);
@@ -507,7 +601,7 @@ async function getUsersWithFiles(req, res) {
     userIds = [...userIds];
 
     // Trouver les utilisateurs correspondant aux ID récupérés
-    const users = await User.find({ '_id': { $in: userIds } }, 'firstname surname username');
+    const users = await User.find({ '_id': { $in: userIds } }, 'firstname lastname username');
 
     res.json(users); // Envoyer la liste des utilisateurs en réponse
 }
