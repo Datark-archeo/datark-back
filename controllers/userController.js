@@ -1,10 +1,10 @@
 const User = require("../models/user.model");
-const jwt = require('jsonwebtoken');
+require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const transporter = require('../utils/nodemailer');
 const Conversation = require("../models/conversation.model");
-const Message = require("../models/message.model");
+require("../models/message.model");
 const FileModel = require("../models/file.model");
 require('dotenv').config();
 
@@ -388,7 +388,7 @@ function newPassword(req, res) {
         user.expire_token = null;
         user.save();
         return res.status(200).send({message : "Votre mot de passe a bien été modifié."});
-    }).catch(err => {
+    }).catch(() => {
         return res.status(400).send({message : "Une erreur est survenue."});
     });
 }
@@ -691,14 +691,14 @@ function follow(req, res) {
             user.save().then(() => {
                 followedUser.save().then(() => {
                     return res.status(200).send({message: "Utilisateur suivi"});
-                }).catch(err => {
+                }).catch(() => {
                     return res.status(400).send({message: "Une erreur est survenue."});
                 });
-            }).catch(err => {
+            }).catch(() => {
                 return res.status(400).send({message: "Une erreur est survenue."});
             });
             return res.status(200).send({message: "Utilisateur suivi"});
-        }).catch(err => {
+        }).catch(() => {
             return res.status(400).send({message: "Une erreur est survenue."});
         });
     });
@@ -743,7 +743,7 @@ function unfollow(req, res) {
             user.save();
             followedUser.save();
             return res.status(200).send({message: "Utilisateur non suivi"});
-        }).catch(err => {
+        }).catch(() => {
             return res.status(400).send({message: "Une erreur est survenue."});
         });
     });
@@ -791,10 +791,10 @@ function likeFile(req, res) {
             user.save().then(() => {
                 file.save().then(() => {
                     return res.status(200).send({message: "Fichier liké", user: user});
-                }).catch(err => {
+                }).catch(() => {
                     return res.status(400).send({message: "Une erreur est survenue."});
                 });
-            }).catch(err => {
+            }).catch(() => {
                 return res.status(400).send({message: "Une erreur est survenue."});
             });
         });
@@ -841,10 +841,10 @@ function unlikeFile(req, res) {
             user.save().then(() => {
                 file.save().then(() => {
                     return res.status(200).send({message: "Fichier unliké", user: user});
-                }).catch(err => {
+                }).catch(() => {
                     return res.status(400).send({message: "Une erreur est survenue."});
                 });
-            }).catch(err => {
+            }).catch(() => {
                 return res.status(400).send({message: "Une erreur est survenue."});
             });
         });
@@ -890,10 +890,10 @@ function removeContact(req, res) {
                 contact.contacts = contact.contacts.filter(contact => contact.toString() !== user._id.toString());
                 contact.save().then(() => {
                     return res.status(200).send({message: "Contact supprimé"});
-                }).catch(err => {
+                }).catch(() => {
                     return res.status(400).send({message: "Une erreur est survenue."});
                 });
-            }).catch(err => {
+            }).catch(() => {
                 return res.status(400).send({message: "Une erreur est survenue."});
             });
 
@@ -919,6 +919,5 @@ module.exports = {
     follow,
     unfollow,
     likeFile,
-    unlikeFile,
-    removeContact
+    unlikeFile
 };

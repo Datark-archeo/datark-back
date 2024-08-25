@@ -7,6 +7,7 @@ const filesPayloadExists = require('../../middleware/filesPayloadExists');
 const fileUpload = require("express-fileupload");
 const verifyJWT = require("../../middleware/verifyJWT");
 const isLogin = require("../../middleware/isLogin");
+const checkLogin = require("../../middleware/checkLogin");
 /**
  * @swagger
  * /files:
@@ -90,6 +91,7 @@ router.route('/user')
  */
 router.route('/upload')
     .post([
+        verifyJWT,
         fileUpload({ createParentPath: true }),
         filesPayloadExists,
         fileExtLimiter(['.pdf']),
@@ -177,7 +179,7 @@ router.route('/edit/:id')
  *         description: Internal server error
  */
 router.route('/search')
-    .get(isLogin, fileController.searchFiles)
+    .get(checkLogin, fileController.searchFiles)
 
 /**
  * @swagger
@@ -216,7 +218,7 @@ router.route('/search')
  *         description: Internal server error
  */
 router.route('/complexSearch')
-    .post(isLogin, fileController.searchComplexFiles)
+    .post(checkLogin, fileController.searchComplexFiles)
 
 /**
  * @swagger

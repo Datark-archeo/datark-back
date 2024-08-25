@@ -35,4 +35,12 @@ const refreshTokenController = require('../controllers/refreshTokenController');
  */
 router.get('/', refreshTokenController.handleRefreshToken);
 
+router.get('/optional', refreshTokenController.optionalAuth, (req, res) => {
+    if (req.username) {
+        res.json({ message: `Hello, ${req.username}!` });
+    } else {
+        res.json({ message: 'Hello, guest!' });
+    }
+});
+
 module.exports = router;

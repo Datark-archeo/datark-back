@@ -131,7 +131,6 @@ const handleLogin = async (req, res) => {
             if(user.username === "default") {
                 return res.status(200).json({ accessToken, message: "NO_USERNAME"  });
             } else {
-                console.log('User logged in');
                 return res.status(200).json({ accessToken, username: user.username});
             }
         } else {

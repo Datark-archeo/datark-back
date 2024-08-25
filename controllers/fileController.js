@@ -249,15 +249,13 @@ async function upload(req, res) {
             };
 
             await axios.put(copyleaksUrl, copyleaksBody, { headers: copyleaksHeaders }).then(response => {
-                console.log('Copyleaks response:', response.data);
+                console.log('Copyleaks response:', response);
                 res.status(200).send({ message: "Le fichier a bien été créé et envoyé à Copyleaks.", file: newFile });
             }).catch(error => {
                 console.error('Copyleaks error PUT:', error.response ? error.response.data : error.message);
-                return res.status(500).send({ message: "Erreur lors de l'envoi du fichier à Copyleaks." });
             });
         }).catch(error => {
             console.error('Copyleaks error POST :', error.response ? error.response.data : error.message);
-            return res.status(500).send({ message: "Erreur lors de l'envoi du fichier à Copyleaks." });
         });
 
     } catch (error) {
@@ -451,14 +449,19 @@ async function searchFiles(req, res) {
         const totalCombinedItems = totalItems + totalPerseeItems;
         if(req.username) {
             // Get User
-            User.findOne({ username: req.username }).exec().then(user => {
-                    if (user) {
-                        user.history.push(req.originalUrl);
-                        user.save();
+            try {
+                const user = await User.findOne({ username: req.username }).exec();
+                if (user) {
+                    const url = req.originalUrl.replace("/api/file/", "/")
+                    // check if originalUrl is no't already in history table
+                    if(!user.history.includes(url)) {
+                    user.history.push(url);
+                    await user.save();
                     }
-                }).catch(err => {
+                }
+            } catch (err) {
                 console.error('Error updating user history:', err);
-            })
+            }
         }
         return res.status(200).json({
             files: combinedResults,
@@ -570,14 +573,19 @@ async function searchComplexFiles(req, res) {
 
         if(req.username) {
             // Get User
-            User.findOne({ username: req.username }).exec().then(user => {
+            try {
+                const user = await User.findOne({ username: req.username }).exec();
                 if (user) {
-                    user.history.push(req.originalUrl);
-                    user.save();
+                    const url = req.originalUrl.replace("/api/file/", "/")
+                    // check if originalUrl is no't already in history table
+                    if(!user.history.includes(url)) {
+                        user.history.push(url);
+                        await user.save();
+                    }
                 }
-            }).catch(err => {
+            } catch (err) {
                 console.error('Error updating user history:', err);
-            })
+            }
         }
 
         return res.status(200).json(combinedResults);
@@ -662,21 +670,38 @@ async function download(req, res) {
 
 async function deleteFile(req, res) {
     const id = req.params.id;
-    const file = await FileModel.findOne({ _id: id }).populate('owner').exec();
-    if (file === null) {
-        return res.status(404).send({message : "Fichier non trouvé."});
-    }
-    if (file.owner.username !== req.username) {
-        return res.status(400).send({message : "Vous n'êtes pas le propriétaire du fichier."});
-    }
-    const filePath = path.join(__dirname, '../users/' + file.owner.username + `/files/${file.file_name}/${file.file_name}`);
-    fs.unlink(filePath, (err) => {
-        if (err) {
-            return res.status(500).send({message : "Erreur lors de la suppression du fichier."});
-        }
-    });
-    await file.delete();
-    return res.status(200).send({message : "Le fichier a bien été supprimé."});
-}
 
+    try {
+        const file = await FileModel.findOne({ _id: id }).populate('owner').exec();
+        if (!file) {
+            return res.status(404).send({ message: "Fichier non trouvé." });
+        }
+
+        if (file.owner.username !== req.username) {
+            return res.status(400).send({ message: "Vous n'êtes pas le propriétaire du fichier." });
+        }
+
+        const filePath = path.join(__dirname, '../users/', file.owner.username, `/files/${file.file_name}/${file.file_name}`);
+
+        // Remove the file from the file system
+        fs.unlink(filePath, async (err) => {
+            if (err) {
+                console.error(err);
+                return res.status(500).send({ message: "Erreur lors de la suppression du fichier." });
+            }
+
+            // Remove the file document from the database
+            try {
+                await FileModel.deleteOne({ _id: id });
+                return res.status(200).send({ message: "Le fichier a bien été supprimé." });
+            } catch (deleteErr) {
+                console.error(deleteErr);
+                return res.status(500).send({ message: "Erreur lors de la suppression de l'enregistrement du fichier." });
+            }
+        });
+    } catch (err) {
+        console.error(err);
+        return res.status(500).send({ message: "Erreur interne du serveur." });
+    }
+}
 module.exports = { upload, getAll, getById, edit, searchFiles, searchComplexFiles, download, deleteFile, getUsersWithFiles };
