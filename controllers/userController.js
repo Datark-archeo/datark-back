@@ -256,20 +256,24 @@ async function emailVerification(req, res) {
     if (!token) {
         return res.status(400).send({message: "Pas de token fourni dans la requête."});
     }
+
     let foundedUser = await User.findOne({verification_token: token}).exec();
     if (foundedUser === null) {
         return res.status(403).send({message: "Token invalide."});
     }
+
     const now = new Date();
     if (now > foundedUser.expire_token) {
         return res.status(400).send({message: "Token expiré."});
     }
+
     foundedUser.email_verified = true;
     foundedUser.verification_token = null;
     foundedUser.expire_token = null;
-    foundedUser.save();
+    await foundedUser.save();  // Ensure you wait for the save operation to complete
 
-    return res.status(200).send({message: "Votre adresse email a bien été vérifiée."});
+    // Redirect to frontend URL
+    return res.redirect(`${process.env.FRONTEND_URL}/login?register=success`); // Update with your actual frontend URL
 }
 
 /**
