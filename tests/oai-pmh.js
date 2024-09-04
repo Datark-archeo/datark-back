@@ -23,7 +23,6 @@ async function main () {
         let description = oai_dc_dc['dc:description'];
         let link = oai_dc_dc['dc:identifier'][0];
 
-        let date = new Date(year);
         if (!Array.isArray(creator)) {
             creator = [creator];
         }
@@ -33,7 +32,7 @@ async function main () {
         await Persee.create({
             name: title,
             description: description,
-            date_publication: date,
+            date_publication: year,
             url: link,
             owner: creator
         });

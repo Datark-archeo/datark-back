@@ -114,7 +114,7 @@ async function upload(req, res) {
         const newFile = await FileModel.create({
             name,
             description,
-            date_publication: new Date(date_creation).toISOString(),
+            date_publication: date_creation,
             file_name: fileData.name,
             pactolsLieux: lieuxIdentifiers,
             pactolsSujets: sujetsIdentifiers,
@@ -316,9 +316,7 @@ async function edit(req, res) {
     }
 
     if (date_creation) {
-        let date = date_creation.split('T')[0];
-        date += 'T00:00:00.000Z';
-        file.date_publication = date;
+        file.date_publication = date_creation;
     }
 
     if (pactolsLieux) {
@@ -476,49 +474,63 @@ async function searchFiles(req, res) {
 }
 
 async function searchComplexFiles(req, res) {
-
-    // Extraction des critères de recherche à partir des paramètres de la requête
-    const { datePublication, ownerId, pactolsLieux, pactolsSujets, searchString } = req.query;
-
-    // Construction du filtre de recherche
-    let searchFilter = {};
-
-    // Filtrage par intervalle de dates de publication
-    if (datePublication) {
-        const year = new Date(datePublication).getFullYear();
-        searchFilter.date_publication = {
-            $gte: new Date(`${year}-01-01`),
-            $lte: new Date(`${year}-12-31`)
-        };
-    }
-
-    // Filtrage par propriétaire (owner)
-    if (ownerId) {
-        searchFilter.owner = ownerId;
-    }
-
-    // Filtrage par liste de pactolsLieux
-    if (pactolsLieux) {
-        searchFilter.pactolsLieux = { $in: pactolsLieux.split(',') };
-    }
-
-    // Filtrage par liste de pactolsSujets
-    if (pactolsSujets) {
-        searchFilter.pactolsSujets = { $in: pactolsSujets.split(',') };
-    }
-
     try {
+        // Extraction des critères de recherche à partir des paramètres de la requête
+        const { datePublication, owners, pactolsLieux, pactolsSujets, searchString } = req.query;
+        let searchFilter = {};
+        let perseeConditions = [];
 
-        let words = searchString ? searchString.split(' ') : [];
+        // Filtrage par année de publication
+        if (datePublication) {
+            const year = parseInt(datePublication, 10);
+            if (!isNaN(year)) {
+                searchFilter.date_publication = year;
+                perseeConditions.push({ date_publication: year });
+            }
+        }
 
+        // Filtrage par propriétaires (owners)
+        if (owners) {
+            const ownerArray = owners.split(',').map(owner => owner.trim());
+            if (ownerArray.length > 0) {
+                const ownerConditions = ownerArray.map(owner => ({
+                    $or: [
+                        { 'owner.firstname': { $regex: owner, $options: 'i' } },
+                        { 'owner.lastname': { $regex: owner, $options: 'i' } },
+                        { 'owner.username': { $regex: owner, $options: 'i' } }
+                    ]
+                }));
+                searchFilter.$or = (searchFilter.$or || []).concat(ownerConditions);
+            }
+        }
+
+        // Filtrage par liste de pactolsLieux
+        if (pactolsLieux) {
+            const pactolLieuxArray = pactolsLieux.split(',').map(lieu => lieu.trim());
+            if (pactolLieuxArray.length > 0) {
+                searchFilter.pactolsLieux = { $in: pactolLieuxArray };
+            }
+        }
+
+        // Filtrage par liste de pactolsSujets
+        if (pactolsSujets) {
+            const pactolSujetsArray = pactolsSujets.split(',').map(sujet => sujet.trim());
+            if (pactolSujetsArray.length > 0) {
+                searchFilter.pactolsSujets = { $in: pactolSujetsArray };
+            }
+        }
+
+        // Filtrage par mots de recherche
+        const words = searchString ? searchString.split(' ').filter(word => word.trim() !== '') : [];
         if (words.length > 0) {
-            searchFilter.$or = words.map(word => ({
+            const wordConditions = words.map(word => ({
                 $or: [
                     { name: { $regex: word, $options: 'i' } },
                     { description: { $regex: word, $options: 'i' } },
                     { pdfText: { $regex: word, $options: 'i' } } // Include PDF text in search
                 ]
             }));
+            searchFilter.$or = (searchFilter.$or || []).concat(wordConditions);
         }
 
         // Exécution de la requête de recherche avec les filtres construits
@@ -526,59 +538,62 @@ async function searchComplexFiles(req, res) {
 
         // Créez un tableau de mots-clés à partir de pactolsLieux et pactolsSujets
         const pactolWords = [
-            ...(pactolsLieux ? pactolsLieux.split(',') : []),
-            ...(pactolsSujets ? pactolsSujets.split(',') : [])
+            ...(pactolsLieux ? pactolsLieux.split(',').map(word => word.trim()) : []),
+            ...(pactolsSujets ? pactolsSujets.split(',').map(word => word.trim()) : [])
         ];
-        const year = datePublication ? new Date(datePublication).getFullYear() : null;
 
-        const perseeConditions = [
-            year ? { $expr: { $eq: [{ $year: "$date_publication" }, year] } } : {},
-            {
+        // Ajout des conditions de recherche pour Persee
+        if (words.length > 0) {
+            const perseeWordConditions = words.map(word => ({
                 $or: [
-                    { name: { $in: words } },
-                    { description: { $in: words } },
-                    { owner: { $in: words } }
+                    { name: { $regex: word, $options: 'i' } },
+                    { description: { $regex: word, $options: 'i' } },
+                    { owner: { $regex: word, $options: 'i' } }
                 ]
-            }
-        ];
-
-        if (pactolWords.length > 0) {
-            perseeConditions.push({
-                $or: pactolWords.map(word => ({
-                    $or: [
-                        { name: { $regex: word, $options: 'i' } },
-                        { description: { $regex: word, $options: 'i' } }
-                    ]
-                }))
-            });
+            }));
+            perseeConditions.push({ $or: perseeWordConditions });
         }
 
-        const perseeResults = await Persee.find({
-            $and: perseeConditions
-        }).lean(); // Utilisation de `.lean()` pour obtenir des objets JavaScript simples.
+        if (pactolWords.length > 0) {
+            const pactolConditions = pactolWords.map(word => ({
+                $or: [
+                    { name: { $regex: word, $options: 'i' } },
+                    { description: { $regex: word, $options: 'i' } }
+                ]
+            }));
+            perseeConditions.push({ $or: pactolConditions });
+        }
 
-        const transformedResults = perseeResults.map(result => {
-            return {
-                _id: result._id.toString(),  // Convertir ObjectId en chaîne
-                name: result.name,
-                description: result.description,
-                date_publication: result.date_publication,
-                url: result.url,
-                perseeOwner: result.owner.join(', '),  // Convertir le tableau en chaîne
-                createdAt: result.createdAt,
-                updatedAt: result.updatedAt
-            };
-        });
+        // Exécution de la requête pour Persee
+        let perseeResults = [];
+        if (perseeConditions.length > 0) {
+            perseeResults = await Persee.find({
+                $and: perseeConditions
+            }).lean();
+        }
+
+        // Transformation des résultats de Persee pour un formatage approprié
+        const transformedResults = perseeResults.map(result => ({
+            _id: result._id.toString(),
+            name: result.name,
+            description: result.description,
+            date_publication: result.date_publication,
+            url: result.url,
+            perseeOwner: Array.isArray(result.owner) ? result.owner.join(', ') : result.owner,  // Gérer le cas où l'owner est déjà une chaîne
+            createdAt: result.createdAt,
+            updatedAt: result.updatedAt
+        }));
+
+        // Combinaison des résultats
         const combinedResults = [...searchResults, ...transformedResults];
 
-        if(req.username) {
-            // Get User
+        // Mise à jour de l'historique de l'utilisateur
+        if (req.username) {
             try {
                 const user = await User.findOne({ username: req.username }).exec();
                 if (user) {
-                    const url = req.originalUrl.replace("/api/file/", "/")
-                    // check if originalUrl is no't already in history table
-                    if(!user.history.includes(url)) {
+                    const url = req.originalUrl.replace("/api/file/", "/");
+                    if (!user.history.includes(url)) {
                         user.history.push(url);
                         await user.save();
                     }
@@ -588,9 +603,10 @@ async function searchComplexFiles(req, res) {
             }
         }
 
+        // Retour des résultats combinés
         return res.status(200).json(combinedResults);
     } catch (error) {
-        console.error(error);
+        console.error('Erreur lors de la recherche des fichiers:', error);
         return res.status(500).send({ message: "Erreur lors de la recherche des fichiers.", error });
     }
 }

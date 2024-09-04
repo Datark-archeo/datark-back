@@ -33,7 +33,7 @@ const ScoreSchema = new mongoose.Schema({
 const FileSchema = new mongoose.Schema({
     name: { type: String, required: true },
     description: { type: String, required: true },
-    date_publication: { type: Date, required: true },
+    date_publication: { type: Number, required: true },
     file_name: { type: String, required: true },
     owner: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     coOwners: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
