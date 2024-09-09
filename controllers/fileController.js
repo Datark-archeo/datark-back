@@ -285,6 +285,7 @@ async function getById(req, res) {
 async function edit(req, res) {
     let {name, description, date_creation, isNewVersion, wantRewrite, pactolsLieux, pactolsSujets} = req.body
     let fileId = req.params.id;
+    let username = req.username;
 
     if (username === null) {
         return res.status(400).send({message : "Utilisateur non trouvé."});
