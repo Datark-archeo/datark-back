@@ -155,8 +155,7 @@ async function upload(req, res) {
                     });
                     newFile.coOwners.push(coOnwers._id);
                     await newFile.save();
-
-                    transporter.sendMail({
+                    const mailOptions = {
                         from: '"Datark invitation" <no-reply@datark.com>',
                         to: invitedCoAuthor.email,
                         subject: 'Invitation à rejoindre Datark',
@@ -168,6 +167,14 @@ async function upload(req, res) {
                             <p>Lien: <a href="${process.env.FRONTEND_URL}/login">${process.env.FRONTEND_URL}/login</a></p>
                             <p>Cordialement,</p>
                             <p>L'équipe Datark</p>`
+                    }
+                    transporter.sendMail(mailOptions, function(error, info){
+                        if (error) {
+                            console.log(error);
+                            return res.status(400).send({message : "Une erreur est survenue lors de l'envoi du mail."});
+                        } else {
+                            console.log('Email sent: ' + info.response);
+                        }
                     });
                 }
             }

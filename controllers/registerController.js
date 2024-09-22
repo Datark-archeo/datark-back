@@ -1,7 +1,7 @@
 const User = require('../models/user.model');
 const crypto = require('crypto');
 const bcrypt = require('bcrypt');
-const transporter = require('../utils/nodemailer');
+const {transporter} = require('../utils/nodemailer');
 
 /**
  * @swagger

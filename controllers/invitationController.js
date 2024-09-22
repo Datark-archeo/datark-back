@@ -22,13 +22,20 @@ async function sendInvitation  (req, res){
 
         // Lien que l'utilisateur suivra pour accepter l'invitation
         const acceptLink = `${process.env.FRONTEND_URL}/accept-invitation?token=${invitationToken}`;
-
-        transporter.sendMail({
+        const mailOptions = {
             from: '"Datark Chat" <no-reply@datark.com>',
             to: recipientEmail,
             subject: 'Invitation à chatter sur Datark',
             html: `Bonjour, <br><br> ${senderUsername} vous a invité à chatter sur Datark. <br> Veuillez <a href="${acceptLink}">cliquer ici</a> pour accepter l'invitation.`
-        });
+        }
+        transporter.sendMail( mailOptions, function(error, info){
+            if (error) {
+                console.log(error);
+                return res.status(400).send({message : "Une erreur est survenue lors de l'envoi du mail."});
+            } else {
+                console.log('Email sent: ' + info.response);
+            }
+        } );
 
         res.status(200).json({ message: 'Invitation envoyée avec succès.' });
     } catch (error) {
