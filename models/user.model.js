@@ -91,6 +91,10 @@ const UserSchema = new mongoose.Schema({
         type: String,
         default: null
     },
+    profileBanner: {
+        type: String,
+        default: null
+    },
     affiliateUniv:{
         type: String,
         default: null

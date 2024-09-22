@@ -115,7 +115,6 @@ async function edit(req, res) {
     if (!body.firstname || !body.lastname || !body.country || !body.city || !body.birthday) {
         return res.status(400).send({message : "At least one input must be filled"});
     }
-    console.log(body);
     const user = await User.findOne( {username: req.username }).exec();
     if (user === null) {
         return res.status(400).send({message : "User not found."});
@@ -905,8 +904,27 @@ function removeContact(req, res) {
     });
 }
 
+function editProfileBanner(req, res) {
+    const { profileBanner } = req.body.user;
+
+    const username = req.username;
+    User.findOne({  username: username }).exec().then(user => {
+        if (!user) {
+            return res.status(400).send({message: "Utilisateur introuvable."});
+        }
+        user.profileBanner = profileBanner;
+        user.save().then(() => {
+            return res.status(200).send({message: "Bannière de profil modifiée"});
+        }).catch(() => {
+            return res.status(400).send({message: "Une erreur est survenue."});
+        });
+
+    });
+}
+
 module.exports = {
     edit,
+    editProfileBanner,
     getUserById,
     files,
     emailVerification,

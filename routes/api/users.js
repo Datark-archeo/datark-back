@@ -85,6 +85,9 @@ router.route('/')
     .put(verifyJWT, userController.edit)
     .delete(verifyJWT, userController.deleteUser);
 
+router.route('/banner')
+    .put(verifyJWT, userController.editProfileBanner)
+
 /**
  * @swagger
  * /users/profile/{id}:
