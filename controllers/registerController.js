@@ -1,7 +1,7 @@
 const User = require('../models/user.model');
 const crypto = require('crypto');
 const bcrypt = require('bcrypt');
-const {transporter} = require('../utils/nodemailer');
+const transporter = require('../utils/nodemailer');
 
 /**
  * @swagger
@@ -117,10 +117,10 @@ const handleNewUser = async (req, res) => {
         <p>Cordialement,</p>
         <p>L'équipe de Datark</p>`
         };
-        transporter.sendMail(mailOptions, function(error, info){
+        await transporter.sendMail(mailOptions, function (error, info) {
             if (error) {
                 console.log(error);
-                return res.status(400).send({message : "Une erreur est survenue lors de l'envoi du mail."});
+                return res.status(400).send({message: "Une erreur est survenue lors de l'envoi du mail."});
             } else {
                 console.log('Email sent: ' + info.response);
             }

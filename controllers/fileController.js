@@ -6,7 +6,7 @@ const crypto = require('crypto');
 const path = require('path');
 const User = require('../models/user.model');
 const Throttle = require('throttle');
-const {transporter} = require('../utils/nodemailer');
+const transporter = require('../utils/nodemailer');
 const bcrypt = require("bcrypt");
 const axios = require('axios');
 const pdfParse = require('pdf-parse')
@@ -142,7 +142,7 @@ async function upload(req, res) {
             for(const invitedCoAuthor of invitedCoAuthors) {
                 const invitedUser = await User.findOne({ email: invitedCoAuthor.email });
                 if (!invitedUser) {
-                    let randomPassword = crypto.randomBytes(32).toString('hex');
+                    let randomPassword = crypto.randomBytes(12).toString('hex');
                     const salt = await bcrypt.genSalt(10);
                     const hashedPassword = await bcrypt.hash(randomPassword, salt);
                     const coOnwers = await User.create({
@@ -168,10 +168,10 @@ async function upload(req, res) {
                             <p>Cordialement,</p>
                             <p>L'équipe Datark</p>`
                     }
-                    transporter.sendMail(mailOptions, function(error, info){
+                    await transporter.sendMail(mailOptions, function (error, info) {
                         if (error) {
                             console.log(error);
-                            return res.status(400).send({message : "Une erreur est survenue lors de l'envoi du mail."});
+                            return res.status(400).send({message: "Une erreur est survenue lors de l'envoi du mail."});
                         } else {
                             console.log('Email sent: ' + info.response);
                         }
@@ -484,7 +484,10 @@ async function searchFiles(req, res) {
 async function searchComplexFiles(req, res) {
     try {
         // Extraction des critères de recherche à partir des paramètres de la requête
-        const { datePublication, owners, pactolsLieux, pactolsSujets, searchString } = req.query;
+        let { datePublication, owners, pactolsLieux, pactolsSujets, searchString, page = 1, limit = 10 } = req.query;
+        console.log('Search criteria:', { datePublication, owners, pactolsLieux, pactolsSujets, searchString });
+        const skip = (page - 1) * limit;
+
         let searchFilter = {};
         let perseeConditions = [];
 
@@ -492,20 +495,33 @@ async function searchComplexFiles(req, res) {
         if (datePublication) {
             const year = parseInt(datePublication, 10);
             if (!isNaN(year)) {
-                searchFilter.date_publication = year;
-                perseeConditions.push({ date_publication: year });
+                const startOfYear = new Date(`${year}-01-01T00:00:00.000Z`);
+                const endOfYear = new Date(`${year + 1}-01-01T00:00:00.000Z`); // Fin de l'année
+                searchFilter.date_publication = year; // Filtre pour vos fichiers (si applicable)
+
+                // Filtre pour Persee, en cherchant une plage de dates
+                perseeConditions.push({
+                    date_publication: {
+                        $gte: startOfYear,
+                        $lt: endOfYear
+                    }
+                });
             }
         }
 
         // Filtrage par propriétaires (owners)
         if (owners) {
-            const ownerArray = owners.split(',').map(owner => owner.trim());
-            if (ownerArray.length > 0) {
-                const ownerConditions = ownerArray.map(owner => ({
+            // check if owners is a string
+            if(owners instanceof String) {
+                owners = [owners];
+            }
+            if (!Array.isArray(owners)) {
+                owners = [owners];
+            }
+            if (owners.length > 0) {
+                const ownerConditions = owners.map(owner => ({
                     $or: [
-                        { 'owner.firstname': { $regex: owner, $options: 'i' } },
-                        { 'owner.lastname': { $regex: owner, $options: 'i' } },
-                        { 'owner.username': { $regex: owner, $options: 'i' } }
+                        { 'owner.label': { $regex: owner, $options: 'i' } },
                     ]
                 }));
                 searchFilter.$or = (searchFilter.$or || []).concat(ownerConditions);
@@ -513,7 +529,7 @@ async function searchComplexFiles(req, res) {
         }
 
         // Filtrage par liste de pactolsLieux
-        if (pactolsLieux) {
+        if (pactolsLieux && pactolsLieux.length > 0) {
             const pactolLieuxArray = pactolsLieux.split(',').map(lieu => lieu.trim());
             if (pactolLieuxArray.length > 0) {
                 searchFilter.pactolsLieux = { $in: pactolLieuxArray };
@@ -521,7 +537,7 @@ async function searchComplexFiles(req, res) {
         }
 
         // Filtrage par liste de pactolsSujets
-        if (pactolsSujets) {
+        if (pactolsSujets && pactolsSujets.length > 0) {
             const pactolSujetsArray = pactolsSujets.split(',').map(sujet => sujet.trim());
             if (pactolSujetsArray.length > 0) {
                 searchFilter.pactolsSujets = { $in: pactolSujetsArray };
@@ -540,23 +556,26 @@ async function searchComplexFiles(req, res) {
             }));
             searchFilter.$or = (searchFilter.$or || []).concat(wordConditions);
         }
-
+        console.log('searchFilter conditions:', searchFilter);
         // Exécution de la requête de recherche avec les filtres construits
-        const searchResults = await FileModel.find(searchFilter).populate('owner').lean();
+        const searchResultsPromise = FileModel.find(searchFilter)
+            .populate('owner')
+            .skip(skip)
+            .limit(limit)
+            .lean()
+            .exec();
 
-        // Créez un tableau de mots-clés à partir de pactolsLieux et pactolsSujets
+        // Conditions pour Persee
         const pactolWords = [
             ...(pactolsLieux ? pactolsLieux.split(',').map(word => word.trim()) : []),
             ...(pactolsSujets ? pactolsSujets.split(',').map(word => word.trim()) : [])
         ];
 
-        // Ajout des conditions de recherche pour Persee
         if (words.length > 0) {
             const perseeWordConditions = words.map(word => ({
                 $or: [
                     { name: { $regex: word, $options: 'i' } },
                     { description: { $regex: word, $options: 'i' } },
-                    { owner: { $regex: word, $options: 'i' } }
                 ]
             }));
             perseeConditions.push({ $or: perseeWordConditions });
@@ -572,22 +591,36 @@ async function searchComplexFiles(req, res) {
             perseeConditions.push({ $or: pactolConditions });
         }
 
-        // Exécution de la requête pour Persee
-        let perseeResults = [];
-        if (perseeConditions.length > 0) {
-            perseeResults = await Persee.find({
-                $and: perseeConditions
-            }).lean();
+        if(owners) {
+            if (owners.length > 0) {
+                const ownerConditions = owners.map(owner => ({
+                    $or: [
+                        { owner: { $regex: owner, $options: 'i' } },
+                    ]
+                }));
+                perseeConditions.push({ $or: ownerConditions });
+            }
         }
+        console.log('Persee conditions:', perseeConditions);
+        // Requête pour Persee
+        const perseeResultsPromise = perseeConditions.length > 0 ? Persee.find({ $and: perseeConditions })
+            .select('name description date_publication url owner status createdAt updatedAt')
+            .skip(skip)
+            .limit(limit)
+            .lean()
+            .exec() : [];
 
-        // Transformation des résultats de Persee pour un formatage approprié
+        // Exécution des deux recherches en parallèle
+        const [searchResults, perseeResults] = await Promise.all([searchResultsPromise, perseeResultsPromise]);
+
+        // Transformation des résultats Persee
         const transformedResults = perseeResults.map(result => ({
             _id: result._id.toString(),
             name: result.name,
             description: result.description,
             date_publication: result.date_publication,
             url: result.url,
-            perseeOwner: Array.isArray(result.owner) ? result.owner.join(', ') : result.owner,  // Gérer le cas où l'owner est déjà une chaîne
+            perseeOwner: Array.isArray(result.owner) ? result.owner.join(', ') : result.owner,
             createdAt: result.createdAt,
             updatedAt: result.updatedAt
         }));
@@ -595,7 +628,13 @@ async function searchComplexFiles(req, res) {
         // Combinaison des résultats
         const combinedResults = [...searchResults, ...transformedResults];
 
-        // Mise à jour de l'historique de l'utilisateur
+        // Calcul du nombre total d'éléments
+        const totalItemsPromise = FileModel.countDocuments(searchFilter);
+        const totalPerseeItemsPromise = Persee.countDocuments({ $and: perseeConditions });
+        const [totalItems, totalPerseeItems] = await Promise.all([totalItemsPromise, totalPerseeItemsPromise]);
+        const totalCombinedItems = totalItems + totalPerseeItems;
+
+        // Mise à jour de l'historique de l'utilisateur si connecté
         if (req.username) {
             try {
                 const user = await User.findOne({ username: req.username }).exec();
@@ -610,9 +649,14 @@ async function searchComplexFiles(req, res) {
                 console.error('Error updating user history:', err);
             }
         }
-
-        // Retour des résultats combinés
-        return res.status(200).json(combinedResults);
+        console.log('combinedResults', combinedResults);
+        // Retour des résultats combinés avec la pagination
+        return res.status(200).json({
+            files: combinedResults,
+            total: totalCombinedItems,  // Total des éléments
+            currentPage: page,          // Page actuelle
+            totalPages: Math.ceil(totalCombinedItems / limit)  // Nombre total de pages
+        });
     } catch (error) {
         console.error('Erreur lors de la recherche des fichiers:', error);
         return res.status(500).send({ message: "Erreur lors de la recherche des fichiers.", error });
@@ -705,7 +749,7 @@ async function deleteFile(req, res) {
             return res.status(400).send({ message: "Vous n'êtes pas le propriétaire du fichier." });
         }
 
-        const filePath = path.join(__dirname, '../users/', file.owner.username, `/files/${file.file_name}/${file.file_name}`);
+        const filePath = path.join(__dirname, '../users/', file.owner.username, `/files/${file.file_name}`);
 
         // Remove the file from the file system
         fs.unlink(filePath, async (err) => {

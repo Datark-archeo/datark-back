@@ -28,14 +28,14 @@ async function sendInvitation  (req, res){
             subject: 'Invitation à chatter sur Datark',
             html: `Bonjour, <br><br> ${senderUsername} vous a invité à chatter sur Datark. <br> Veuillez <a href="${acceptLink}">cliquer ici</a> pour accepter l'invitation.`
         }
-        transporter.sendMail( mailOptions, function(error, info){
+        await transporter.sendMail(mailOptions, function (error, info) {
             if (error) {
                 console.log(error);
-                return res.status(400).send({message : "Une erreur est survenue lors de l'envoi du mail."});
+                return res.status(400).send({message: "Une erreur est survenue lors de l'envoi du mail."});
             } else {
                 console.log('Email sent: ' + info.response);
             }
-        } );
+        });
 
         res.status(200).json({ message: 'Invitation envoyée avec succès.' });
     } catch (error) {

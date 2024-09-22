@@ -16,6 +16,10 @@ const PerseeSchema = new mongoose.Schema({
     owner: {
         type: Array,
     },
+    status: {
+        type: String,
+        default : "valid"
+    },
 }, {
     timestamps: true,  // Ceci ajoutera des champs pour le moment de la création et de la modification
 });
