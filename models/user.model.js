@@ -25,14 +25,17 @@ const UserSchema = new mongoose.Schema({
     },
     country: {
         type: String,
+        default: "N/A",
         required: true
     },
     city: {
         type: String,
+        default: "N/A",
         required: true
     },
     birthday: {
         type: Date,
+        default: () => Date.now() + 7*24*60*60*1000,
         required: true
     },
     email_verified: {
