@@ -37,6 +37,10 @@ const FileSchema = new mongoose.Schema({
     file_name: { type: String, required: true },
     owner: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     coOwners: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+    invitedCoAuthors : [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'InvitedCoAuthor'
+    }],
     version: { type: mongoose.Schema.Types.ObjectId, ref: 'Version' },
     likedBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     likesCount: { type: Number, default: 0 },

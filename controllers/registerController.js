@@ -1,4 +1,5 @@
 const User = require('../models/user.model');
+const FileModel = require('../models/file.model');
 const crypto = require('crypto');
 const bcrypt = require('bcrypt');
 const transporter = require('../utils/nodemailer');
@@ -89,10 +90,9 @@ const handleNewUser = async (req, res) => {
         body.password = await bcrypt.hash(body.password, salt);
         const token = crypto.randomBytes(32).toString('hex');
         const expire_token = new Date();
-        expire_token.setHours(expire_token.getHours() + 3);  // Le token expire dans 1 heure
+        expire_token.setHours(expire_token.getHours() + 3);  // Le token expire dans 3 heures
         const result = await User.create({
             firstname: body.firstname,
-            lastname : body.lastname,
             lastname : body.lastname,
             username : body.username,
             email : body.email,
@@ -105,6 +105,16 @@ const handleNewUser = async (req, res) => {
             expire_token: expire_token,
             profilePicture : profilePicture
         });
+
+        // check is user are invited as co-author
+        const files = await FileModel.find({invitedCoAuthors: body.email});
+        if(files.length > 0){
+            files.forEach(async file => {
+                file.invitedCoAuthors = file.invitedCoAuthors.filter(invitedCoAuthor => invitedCoAuthor !== body.email);
+                file.coOwners.push(result._id);
+                await file.save();
+            });
+        }
 
         const mailOptions = {
             from: `${process.env.MAIL_SENDER}`,

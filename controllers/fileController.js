@@ -5,6 +5,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const path = require('path');
 const User = require('../models/user.model');
+const InvitedCoAuthor = require('../models/invited_co_author.model');
 const Throttle = require('throttle');
 const transporter = require('../utils/nodemailer');
 const bcrypt = require("bcrypt");
@@ -142,16 +143,10 @@ async function upload(req, res) {
             for(const invitedCoAuthor of invitedCoAuthors) {
                 const invitedUser = await User.findOne({ email: invitedCoAuthor.email });
                 if (!invitedUser) {
-                    let randomPassword = crypto.randomBytes(12).toString('hex');
-                    const salt = await bcrypt.genSalt(10);
-                    const hashedPassword = await bcrypt.hash(randomPassword, salt);
-                    const coOnwers = await User.create({
+                    const coOnwers = await InvitedCoAuthor.create({
                         email: invitedCoAuthor.email,
                         firstname: invitedCoAuthor.firstname,
                         lastname: invitedCoAuthor.lastname,
-                        password: hashedPassword,
-                        username: 'default',
-                        files: [newFile._id]
                     });
                     newFile.coOwners.push(coOnwers._id);
                     await newFile.save();
@@ -161,10 +156,9 @@ async function upload(req, res) {
                         subject: 'Invitation à rejoindre Datark',
                         html: `<p>Bonjour,</p>
                             <p>Vous avez été invité à rejoindre Datark pour collaborer sur un fichier.</p>
-                            <p>Votre mot de passe temporaire est : ${randomPassword}</p>
-                            <p>Connectez-vous avec votre email : ${invitedCoAuthor.email}, afin de compléter votre profile.</p>
-                            <a href="${process.env.FRONTEND_URL}/login">Se connecter</a>
-                            <p>Lien: <a href="${process.env.FRONTEND_URL}/login">${process.env.FRONTEND_URL}/login</a></p>
+                            <p>Inscrivez-vous avec votre email : ${invitedCoAuthor.email}, afin de créer votre profile.</p>
+                            <a href="${process.env.FRONTEND_URL}/signup">S'inscrire</a>
+                            <p>Lien: <a href="${process.env.FRONTEND_URL}/signup">${process.env.FRONTEND_URL}/signup</a></p>
                             <p>Cordialement,</p>
                             <p>L'équipe Datark</p>`
                     }
