@@ -3,7 +3,7 @@ const express = require('express');
 const app = express();
 const cors = require('cors');
 const corsOptions = require('./config/corsOptions');
-const { logger } = require('./middleware/logEvents');
+const {logger} = require('./middleware/logEvents');
 const errorHandler = require('./middleware/errorHandler');
 const cookieParser = require('cookie-parser');
 const credentials = require('./middleware/credentials');
@@ -11,7 +11,7 @@ const mongoose = require('mongoose');
 const connectDB = require("./utils/dbConnection");
 const swaggerJsdoc = require('swagger-jsdoc');
 const swaggerUi = require('swagger-ui-express');
-
+const {join} = require("node:path");
 // Get port from environment and store in Express
 const PORT = process.env.PORT || '3500';
 app.set('port', PORT);
@@ -26,13 +26,15 @@ app.use(credentials);
 app.use(cors(corsOptions));
 
 // built-in middleware to handle urlencoded form data
-app.use(express.urlencoded({ extended: true }));
-
+app.use(express.urlencoded({extended: true, limit: '50mb'}));
 // built-in middleware for json
-app.use(express.json());
+app.use(express.json({limit: '50mb'}));
 
 //middleware for cookies
 app.use(cookieParser());
+
+// Serve static files
+app.use('/uploads', express.static(join(__dirname, 'uploads')));
 
 if (!process.env.ACCESS_TOKEN_SECRET) {
     throw new Error('ACCESS_TOKEN_SECRET is not defined');

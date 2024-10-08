@@ -1,12 +1,15 @@
 const User = require("../models/user.model");
-require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const transporter = require('../utils/nodemailer');
 const Conversation = require("../models/conversation.model");
-require("../models/message.model");
 const FileModel = require("../models/file.model");
+const sharp = require('sharp');
 require('dotenv').config();
+require("../models/message.model");
+require('jsonwebtoken');
+const fs = require('fs');
+const path = require('path');
 
 /**
  * @swagger
@@ -78,14 +81,16 @@ require('dotenv').config();
  */
 async function getInfo(req, res) {
     let username = req.username;
-    let foundedUser = await User.findOne({ $or: [
-            { username: username },
-            { email: username }
-        ]}).populate('downloadedFiles').populate('files');
+    let foundedUser = await User.findOne({
+        $or: [
+            {username: username},
+            {email: username}
+        ]
+    }).populate('downloadedFiles').populate('files');
     if (!foundedUser) {
-        return res.status(400).json({ "message": `Utilisateur non trouvé` });
+        return res.status(400).json({"message": `Utilisateur non trouvé`});
     }
-    return res.status(200).json({ user: foundedUser });
+    return res.status(200).json({user: foundedUser});
 }
 
 /**
@@ -112,65 +117,261 @@ async function getInfo(req, res) {
  */
 async function edit(req, res) {
     let body = req.body.user;
-    if (!body.firstname || !body.lastname || !body.country || !body.city || !body.birthday) {
-        return res.status(400).send({message : "At least one input must be filled"});
-    }
-    const user = await User.findOne( {username: req.username }).exec();
-    if (user === null) {
-        return res.status(400).send({message : "User not found."});
+
+    // Vérifier qu'au moins un champ est fourni
+    if (!body.firstname && !body.lastname && !body.country && !body.city && !body.birthday && !body.newEmail && !body.newPassword && !body.profilePicture) {
+        return res.status(400).send({message: "Au moins un champ doit être rempli."});
     }
 
+    const user = await User.findOne({username: req.username}).exec();
+    if (user === null) {
+        return res.status(400).send({message: "Utilisateur non trouvé."});
+    }
+
+    // Sanitiser le nom d'utilisateur
+    const safeUsername = sanitizeUsername(user.username);
+
     // Si l'utilisateur veut changer son email
-    if(body.newEmail) {
-        if(!body.confirmEmail){
-            return res.status(400).send({message : "Please confirm your email."});
+    if (body.newEmail) {
+        if (!body.confirmEmail) {
+            return res.status(400).send({message: "Veuillez confirmer votre email."});
         }
-        if(body.newEmail !== body.confirmEmail){
-            return res.status(400).send({message : "The emails do not match."});
+        if (body.newEmail !== body.confirmEmail) {
+            return res.status(400).send({message: "Les emails ne correspondent pas."});
         }
         user.email = body.newEmail;
     }
 
     // Si l'utilisateur veut changer son mot de passe
-    if(body.newPassword) {
-        if(body.newPassword !== body.confirmPassword){
-            return res.status(400).send({message : "The passwords do not match."});
+    if (body.newPassword) {
+        if (body.newPassword !== body.confirmPassword) {
+            return res.status(400).send({message: "Les mots de passe ne correspondent pas."});
         }
         const salt = await bcrypt.genSalt(10);
         user.password = await bcrypt.hash(body.newPassword, salt);
     }
 
-    // Si l'utilisateur veut changer son nom
-    if(body.firstname) {
+    // Mettre à jour les autres champs si fournis
+    if (body.firstname) {
         user.firstname = body.firstname;
     }
-
-    // Si l'utilisateur veut changer son prénom
-    if(body.lastname) {
+    if (body.lastname) {
         user.lastname = body.lastname;
     }
-
-    // Si l'utilisateur veut changer son pays
-    if(body.country) {
+    if (body.country) {
         user.country = body.country;
     }
-    // Si l'utilisateur veut changer sa ville
-    if(body.city) {
+    if (body.city) {
         user.city = body.city;
     }
-    // Si l'utilisateur veut changer sa date de naissance
-    if(body.birthday) {
+    if (body.birthday) {
         user.birthday = body.birthday;
     }
 
-    // si l'utilisateur veut changer sa photo de profil
-    if(body.profilePicture) {
-        user.profilePicture = body.profilePicture;
+    // Si l'utilisateur veut changer sa photo de profil
+    if (body.profilePicture) {
+        try {
+            const imageDir = path.join(__dirname, '..', 'uploads', 'users', safeUsername, 'profile');
+
+            // Créer le répertoire s'il n'existe pas
+            await fs.promises.mkdir(imageDir, {recursive: true});
+
+            let filename;
+
+            if (body.profilePicture.startsWith('data:image/')) {
+                // Traitement de l'image encodée en base64
+                const matches = body.profilePicture.match(/^data:image\/([a-zA-Z]+);base64,(.+)$/);
+                if (!matches || matches.length !== 3) {
+                    return res.status(400).send({message: "Format d'image invalide."});
+                }
+                const imageType = matches[1];
+                const imageData = matches[2];
+
+                // Validation du type d'image
+                const allowedImageTypes = ['png', 'jpg', 'jpeg', 'webp'];
+                if (!allowedImageTypes.includes(imageType.toLowerCase())) {
+                    return res.status(400).send({message: "Type d'image non supporté."});
+                }
+
+                // Décodage des données base64
+                const buffer = Buffer.from(imageData, 'base64');
+
+                // Génération du nom de fichier
+                filename = `profile.${imageType}`;
+
+                const imagePath = path.join(imageDir, filename);
+
+                // Utilisation de sharp pour redimensionner et sauvegarder l'image
+                await sharp(buffer)
+                    .resize(256, 256, {fit: 'cover'})
+                    .toFile(imagePath);
+
+                // Mise à jour du chemin de l'image de profil
+                const baseUrl = process.env.BACKEND_URL || 'http://localhost:3000';
+                user.profilePicture = `${baseUrl}/uploads/users/${safeUsername}/profile/${filename}`;
+            } else {
+                // Traitement des images de profil par défaut
+                const defaultImages = [
+                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Default.webp`,
+                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Agrippa.webp`,
+                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Archeologue.webp`,
+                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Barbe_noire.webp`,
+                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Cleopatre-1.webp`,
+                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Cleopatre-2.webp`,
+                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Clovis.webp`,
+                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/De_Vinci.webp`,
+                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Delphes.webp`,
+                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Francois_Ier.webp`,
+                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Gengis_Khan.webp`,
+                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Germanicus.webp`,
+                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Hadrien.webp`,
+                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Hannibal.webp`,
+                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Heracles.webp`,
+                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Jeanne_d-Arc.webp`,
+                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Jules_Cesar-1.webp`,
+                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Jules_Cesar-2.webp`,
+                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Justinien.webp`,
+                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Leonidas.webp`,
+                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Louis_IX.webp`,
+                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Marc_Antoine.webp`,
+                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Marie_Curie.webp`,
+                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Napoleonien.webp`,
+                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Newton.webp`,
+                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Agrippa.webp`,
+                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Pericles.webp`,
+                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Platon.webp`,
+                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Scipion.webp`,
+                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Socrate.webp`,
+                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Van_Gogh.webp`,
+                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Vercingetorix.webp`,
+                    // Ajoutez les autres images par défaut autorisées ici
+                ];
+                if (!defaultImages.includes(body.profilePicture)) {
+                    return res.status(400).send({message: "Image de profil non valide."});
+                }
+
+                // Copier l'image par défaut dans le répertoire de l'utilisateur
+                const sourceImagePath = path.join(__dirname, '..', 'public', body.profilePicture.replace(`${process.env.FRONTEND_URL}`, ''));
+                filename = path.basename(sourceImagePath);
+                const destinationImagePath = path.join(imageDir, filename);
+
+                // Vérifier si le fichier source existe
+                if (!fs.existsSync(sourceImagePath)) {
+                    return res.status(400).send({message: "Image de profil par défaut introuvable."});
+                }
+
+                // Copier le fichier
+                await fs.promises.copyFile(sourceImagePath, destinationImagePath);
+
+                // Mise à jour du chemin de l'image de profil
+                const baseUrl = process.env.BACKEND_URL || 'http://localhost:3000';
+                user.profilePicture = `${baseUrl}/uploads/users/${safeUsername}/profile/${filename}`;
+            }
+        } catch (error) {
+            console.error("Erreur lors du traitement de la photo de profil :", error);
+            return res.status(500).send({message: "Une erreur est survenue lors de la mise à jour de la photo de profil."});
+        }
     }
 
     await user.save();
-    return res.status(200).send({message : "L'utilisateur a bien été modifié."});
+    return res.status(200).send({message: "L'utilisateur a bien été modifié."});
 }
+
+/**
+ * @swagger
+ * /users/change-password:
+ *   post:
+ *     summary: Change le mot de passe de l'utilisateur authentifié
+ *     tags:
+ *       - Utilisateurs
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       description: Ancien et nouveau mot de passe
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - oldPassword
+ *               - newPassword
+ *             properties:
+ *               oldPassword:
+ *                 type: string
+ *                 description: L'ancien mot de passe de l'utilisateur
+ *               newPassword:
+ *                 type: string
+ *                 description: Le nouveau mot de passe souhaité
+ *             example:
+ *               oldPassword: "ancienMotDePasse123"
+ *               newPassword: "nouveauMotDePasse456"
+ *     responses:
+ *       200:
+ *         description: Mot de passe mis à jour avec succès
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Mot de passe mis à jour avec succès."
+ *       400:
+ *         description: Requête invalide (par exemple, mot de passe manquant ou incorrect)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Le mot de passe actuel est incorrect."
+ *       401:
+ *         description: Non autorisé (token invalide ou manquant)
+ *       500:
+ *         description: Erreur serveur
+ */
+async function changePassword(req, res) {
+    try {
+        const username = req.username;
+        const {oldPassword, newPassword} = req.body;
+
+        // Vérification de la présence des champs requis
+        if (!oldPassword || !newPassword) {
+            return res.status(400).json({message: 'Veuillez fournir les mots de passe requis.'});
+        }
+
+        // Récupération de l'utilisateur
+        const user = await User.find({'username': username}).select('+password');
+        if (!user) {
+            return res.status(404).json({message: 'Utilisateur non trouvé.'});
+        }
+
+        // Vérification du mot de passe actuel
+        const isMatch = await bcrypt.compare(oldPassword, user.password);
+        if (!isMatch) {
+            return res.status(400).json({message: 'Le mot de passe actuel est incorrect.'});
+        }
+
+        // Validation du nouveau mot de passe (par exemple, longueur minimale)
+        if (newPassword.length < 8) {
+            return res.status(400).json({message: 'Le nouveau mot de passe doit contenir au moins 8 caractères.'});
+        }
+
+        // Hachage du nouveau mot de passe
+        const salt = await bcrypt.genSalt(10);
+        user.password = await bcrypt.hash(newPassword, salt);
+
+        // Sauvegarde de l'utilisateur
+        await user.save();
+
+        res.status(200).json({message: 'Mot de passe mis à jour avec succès.'});
+    } catch (error) {
+        console.error('Erreur lors du changement de mot de passe :', error);
+        res.status(500).json({message: 'Erreur serveur.'});
+    }
+};
 
 /**
  * @swagger
@@ -194,7 +395,7 @@ async function edit(req, res) {
  */
 async function getUserById(req, res) {
     const id = req.params.id;
-    const user = await User.findOne({ _id: id }).select('-password')
+    const user = await User.findOne({_id: id}).select('-password')
         .populate('files')
         .populate({
             path: 'contacts',
@@ -301,9 +502,9 @@ async function emailVerification(req, res) {
 function resetPassword(req, res) {
     try {
         const {email} = req.body;
-        User.findOne({ email: email }).exec().then(user => {
-            if(user === null){
-                return res.status(400).send({message : "User not found."});
+        User.findOne({email: email}).exec().then(user => {
+            if (user === null) {
+                return res.status(400).send({message: "User not found."});
             }
             const token = crypto.randomBytes(32).toString('hex');
             const expire_token = new Date();
@@ -322,18 +523,18 @@ function resetPassword(req, res) {
             <p>Cordialement,</p>
             <p>L'équipe de Datark</p>`
             };
-            transporter.sendMail(mailOptions, function(error, info){
+            transporter.sendMail(mailOptions, function (error, info) {
                 if (error) {
-                    return res.status(400).send({message : "Une erreur est survenue lors de l'envoi du mail."});
+                    return res.status(400).send({message: "Une erreur est survenue lors de l'envoi du mail."});
                 } else {
                     console.log('Email sent: ' + info.response);
-                    return res.status(200).send({message : "Un mail de réinitialisation de mot de passe a été envoyé."});
+                    return res.status(200).send({message: "Un mail de réinitialisation de mot de passe a été envoyé."});
                 }
             });
         });
     } catch (error) {
         console.log(error);
-        return res.status(400).send({message : "Une erreur est survenue."});
+        return res.status(400).send({message: "Une erreur est survenue."});
     }
 }
 
@@ -371,28 +572,28 @@ function resetPassword(req, res) {
 function newPassword(req, res) {
     const token = req.query.token;
     const body = req.body;
-    if(!token){
-        return res.status(400).send({message : "Pas de token fourni dans la requête."});
+    if (!token) {
+        return res.status(400).send({message: "Pas de token fourni dans la requête."});
     }
-    User.findOne({verification_token: token }).exec().then(async  user => {
-        if(user === null){
-            return res.status(400).send({message : "Token invalide."});
+    User.findOne({verification_token: token}).exec().then(async user => {
+        if (user === null) {
+            return res.status(400).send({message: "Token invalide."});
         }
         const now = new Date();
-        if(now > user.expire_token){
-            return res.status(400).send({message : "Token expiré."});
+        if (now > user.expire_token) {
+            return res.status(400).send({message: "Token expiré."});
         }
-        if(body.password !== body.confirmPassword){
-            return res.status(400).send({message : "Les mots de passe ne correspondent pas."});
+        if (body.password !== body.confirmPassword) {
+            return res.status(400).send({message: "Les mots de passe ne correspondent pas."});
         }
         const salt = await bcrypt.genSalt(10);
         user.password = await bcrypt.hash(req.body.password, salt);
         user.verification_token = null;
         user.expire_token = null;
         user.save();
-        return res.status(200).send({message : "Votre mot de passe a bien été modifié."});
+        return res.status(200).send({message: "Votre mot de passe a bien été modifié."});
     }).catch(() => {
-        return res.status(400).send({message : "Une erreur est survenue."});
+        return res.status(400).send({message: "Une erreur est survenue."});
     });
 }
 
@@ -411,9 +612,9 @@ function newPassword(req, res) {
  *         $ref: '#/components/responses/InternalServerError'
  */
 async function resendEmailVerification(req, res) {
-    const user = await User.findOne({username: req.username }).exec();
+    const user = await User.findOne({username: req.username}).exec();
     if (user === null) {
-        return res.status(400).send({message : "Utilisateur introuvable."});
+        return res.status(400).send({message: "Utilisateur introuvable."});
     }
     const token = crypto.randomBytes(32).toString('hex');
     const expire_token = new Date();
@@ -443,7 +644,7 @@ async function resendEmailVerification(req, res) {
         }
     });
 
-    return res.status(400).send({message : "Une erreur est survenue lors de l'envoi du mail."});
+    return res.status(400).send({message: "Une erreur est survenue lors de l'envoi du mail."});
 }
 
 /**
@@ -461,16 +662,16 @@ async function resendEmailVerification(req, res) {
  *         $ref: '#/components/responses/InternalServerError'
  */
 async function deleteUser(req, res) {
-    const foundedUser = await User.findOne({ _id: req.body.id}).exec();
+    const foundedUser = await User.findOne({_id: req.body.id}).exec();
     if (!foundedUser) {
-        return res.status(400).json({ "message": `Utilisateur non trouvé` });
+        return res.status(400).json({"message": `Utilisateur non trouvé`});
     }
     try {
         await foundedUser.destroy();
     } catch (error) {
-        return res.status(400).json({ "message": `Une erreur est survenue lors de la suppression de l'utilisateur` });
+        return res.status(400).json({"message": `Une erreur est survenue lors de la suppression de l'utilisateur`});
     }
-    return res.status(200).json({ "message": `Utilisateur supprimé` });
+    return res.status(200).json({"message": `Utilisateur supprimé`});
 }
 
 /**
@@ -494,21 +695,21 @@ async function deleteUser(req, res) {
  *         $ref: '#/components/responses/InternalServerError'
  */
 async function setUser(req, res) {
-    const { user } = req.body;
-    if(!user.username || !user.email || !user.city || !user.country || !user.birthday){
-        return res.status(400).send({message : "Veuillez remplir tous les champs."});
+    const {user} = req.body;
+    if (!user.username || !user.email || !user.city || !user.country || !user.birthday) {
+        return res.status(400).send({message: "Veuillez remplir tous les champs."});
     }
 
     const foundUser = await User.findOne({email: user.email}).exec();
     const similarUser = await User.findOne({username: user.username}).exec();
-    if(similarUser) {
-        return res.status(400).send({message : "Le nom d'utilisateur est déjà pris."});
+    if (similarUser) {
+        return res.status(400).send({message: "Le nom d'utilisateur est déjà pris."});
     }
-    if(!foundUser){
-        return res.status(400).send({message : "Utilisateur introuvable."});
+    if (!foundUser) {
+        return res.status(400).send({message: "Utilisateur introuvable."});
     }
-    if(foundUser.username !== "default"){
-        return res.status(400).send({message : "L'utilisateur a déjà été créé."});
+    if (foundUser.username !== "default") {
+        return res.status(400).send({message: "L'utilisateur a déjà été créé."});
     }
 
     foundUser.username = user.username;
@@ -517,7 +718,7 @@ async function setUser(req, res) {
     foundUser.birthday = user.birthday;
     await foundUser.save();
 
-    return res.status(200).send({message : "L'utilisateur a bien été créé."});
+    return res.status(200).send({message: "L'utilisateur a bien été créé."});
 }
 
 /**
@@ -538,7 +739,7 @@ async function getAllUsers(req, res) {
         res.status(200).json(users);
     } catch (error) {
         console.error("Erreur lors de la récupération des utilisateurs: ", error);
-        res.status(500).json({ message: "Erreur lors de la récupération des utilisateurs" });
+        res.status(500).json({message: "Erreur lors de la récupération des utilisateurs"});
     }
 }
 
@@ -568,27 +769,27 @@ async function getAllUsers(req, res) {
  *         $ref: '#/components/responses/InternalServerError'
  */
 async function createConversation(req, res) {
-    const { participants } = req.body;
+    const {participants} = req.body;
     const username = req.username;
     let participantsObj = JSON.parse(participants);
-    if (!participantsObj ) {
-        return res.status(400).json({ message: "Erreur aucun participant" });
+    if (!participantsObj) {
+        return res.status(400).json({message: "Erreur aucun participant"});
     }
     participantsObj.push(username);
     const userIds = [];
     for (const participant of participantsObj) {
         const user = await User.findOne({username: participant}).exec();
         if (!user) {
-            return res.status(400).json({ message: `L'utilisateur avec l'ID ${participant} n'existe pas` });
+            return res.status(400).json({message: `L'utilisateur avec l'ID ${participant} n'existe pas`});
         }
         userIds.push(user._id);
     }
     try {
-        const newConversation = await Conversation.create({ participants: userIds });
+        const newConversation = await Conversation.create({participants: userIds});
         res.status(201).json(newConversation);
     } catch (error) {
         console.error("Erreur lors de la création de la conversation: ", error);
-        res.status(500).json({ message: "Erreur lors de la création de la conversation" });
+        res.status(500).json({message: "Erreur lors de la création de la conversation"});
     }
 }
 
@@ -609,15 +810,15 @@ async function createConversation(req, res) {
 async function getAllConversation(req, res) {
     const username = req.username;
     try {
-        const user = await User.findOne({ username: username }).exec();
+        const user = await User.findOne({username: username}).exec();
         if (!user) {
-            return res.status(400).json({ message: "Utilisateur non trouvé" });
+            return res.status(400).json({message: "Utilisateur non trouvé"});
         }
-        const conversations = await Conversation.find({ 'participants': { $in: [user._id] } }).populate(['participants', 'messages']).exec();
+        const conversations = await Conversation.find({'participants': {$in: [user._id]}}).populate(['participants', 'messages']).exec();
         res.status(200).json(conversations);
     } catch (error) {
         console.error("Erreur lors de la récupération des conversations: ", error);
-        res.status(500).json({ message: "Erreur lors de la récupération des conversations" });
+        res.status(500).json({message: "Erreur lors de la récupération des conversations"});
     }
 }
 
@@ -638,14 +839,14 @@ async function getAllConversation(req, res) {
 async function getContacts(req, res) {
     const username = req.username;
     try {
-        const user = await User.findOne({ username: username })
+        const user = await User.findOne({username: username})
             .populate({
                 path: 'contacts',
                 select: 'firstname lastname username'
             })
             .exec();
         if (!user) {
-            return res.status(400).json({ message: "Utilisateur non trouvé" });
+            return res.status(400).json({message: "Utilisateur non trouvé"});
         }
         res.status(200).json(user.contacts);
 
@@ -779,7 +980,7 @@ function unfollow(req, res) {
 function likeFile(req, res) {
     const {id} = req.body;
     const username = req.username;
-    User.findOne({username : username}).exec().then(user => {
+    User.findOne({username: username}).exec().then(user => {
         if (!user) {
             return res.status(400).send({message: "Utilisateur introuvable."});
         }
@@ -831,11 +1032,11 @@ function likeFile(req, res) {
 function unlikeFile(req, res) {
     const {id} = req.body;
     const username = req.username;
-    User.findOne({ username: username }).exec().then(user => {
+    User.findOne({username: username}).exec().then(user => {
         if (!user) {
             return res.status(400).send({message: "Utilisateur introuvable."});
         }
-        FileModel.findOne({ _id: id }).exec().then(file => {
+        FileModel.findOne({_id: id}).exec().then(file => {
             if (!file) {
                 return res.status(400).send({message: "Fichier introuvable."});
             }
@@ -880,11 +1081,11 @@ function unlikeFile(req, res) {
 function removeContact(req, res) {
     const {id} = req.body;
     const username = req.username;
-    User.findOne({  username: username }).exec().then(user => {
+    User.findOne({username: username}).exec().then(user => {
         if (!user) {
             return res.status(400).send({message: "Utilisateur introuvable."});
         }
-        User.findOne ({ _id: id }).exec().then(contact => {
+        User.findOne({_id: id}).exec().then(contact => {
             if (!contact) {
                 return res.status(400).send({message: "Contact introuvable."});
             }
@@ -904,22 +1105,72 @@ function removeContact(req, res) {
     });
 }
 
-function editProfileBanner(req, res) {
-    const { profileBanner } = req.body.user;
 
-    const username = req.username;
-    User.findOne({  username: username }).exec().then(user => {
-        if (!user) {
-            return res.status(400).send({message: "Utilisateur introuvable."});
-        }
-        user.profileBanner = profileBanner;
-        user.save().then(() => {
-            return res.status(200).send({message: "Bannière de profil modifiée"});
-        }).catch(() => {
-            return res.status(400).send({message: "Une erreur est survenue."});
+function editProfileBanner(req, res) {
+    // Vérifie si un fichier a été téléchargé
+    if (req.file) {
+        const file = req.file;
+        const username = req.username;
+        User.findOne({username: username}).exec().then(user => {
+            if (!user) {
+                // Supprime le fichier téléchargé si l'utilisateur n'existe pas
+                fs.unlink(file.path, (err) => {
+                    if (err) {
+                        console.error('Erreur lors de la suppression du fichier:', err);
+                    }
+                });
+                return res.status(400).send({message: "Utilisateur introuvable."});
+            }
+
+            // Supprime l'ancienne bannière si elle existe et n'est pas une bannière par défaut
+            if (user.profileBanner && !user.profileBanner.startsWith('assets/img/banner_pictures/')) {
+                const oldBannerPath = path.join(__dirname, '..', user.profileBanner);
+                fs.unlink(oldBannerPath, (err) => {
+                    if (err) {
+                        console.error('Erreur lors de la suppression de l\'ancienne bannière:', err);
+                    }
+                });
+            }
+
+            // Met à jour le profil avec le chemin de la nouvelle image
+            const baseUrl = process.env.BACKEND_URL || 'http://localhost:3000';
+            user.profileBanner = `${baseUrl}/banners/ + ${file.filename}`;
+            
+            user.save().then(() => {
+                return res.status(200).send({message: "Bannière de profil modifiée", bannerUrl: user.profileBanner});
+            }).catch((err) => {
+                console.error('Erreur lors de la sauvegarde de l\'utilisateur:', err);
+                return res.status(500).send({message: "Une erreur est survenue lors de la sauvegarde."});
+            });
+
+        }).catch((err) => {
+            console.error('Erreur lors de la recherche de l\'utilisateur:', err);
+            return res.status(500).send({message: "Une erreur est survenue."});
         });
 
-    });
+    } else if (req.body.user) {
+        const {profileBanner} = req.body.user;
+
+        const username = req.username;
+        User.findOne({username: username}).exec().then(user => {
+            if (!user) {
+                return res.status(400).send({message: "Utilisateur introuvable."});
+            }
+            user.profileBanner = profileBanner;
+            user.save().then(() => {
+                return res.status(200).send({message: "Bannière de profil modifiée"});
+            }).catch(() => {
+                return res.status(400).send({message: "Une erreur est survenue."});
+            });
+
+        });
+    } else {
+        return res.status(400).send({message: "Aucun fichier ou bannière sélectionnée."});
+    }
+}
+
+function sanitizeUsername(username) {
+    return username.replace(/[^a-zA-Z0-9_-]/g, '');
 }
 
 module.exports = {
@@ -941,5 +1192,6 @@ module.exports = {
     follow,
     unfollow,
     likeFile,
-    unlikeFile
+    unlikeFile,
+    changePassword
 };

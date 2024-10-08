@@ -58,211 +58,205 @@ const pdfParse = require('pdf-parse')
  */
 
 async function upload(req, res) {
-    let { name, description, date_creation, pactolsLieux, pactolsSujets, coOwnersIds, invitedCoAuthors } = req.body;
+    let {name, description, date_creation, pactolsLieux, pactolsSujets, coOwnersIds, invitedCoAuthors} = req.body;
 
     if (!req.username) {
-        return res.status(400).send({ message: "Utilisateur non trouvé." });
+        return res.status(400).send({message: "Utilisateur non trouvé."});
     }
 
-    const username = req.username;
+    const username = sanitizeUsername(req.username);
 
     if (!name || !description || !date_creation || !pactolsLieux || !pactolsSujets) {
-        return res.status(400).send({ message: "Veuillez remplir tous les champs." });
+        return res.status(400).send({message: "Veuillez remplir tous les champs."});
     }
+
     try {
-        const existingFile = await FileModel.findOne({ name: name }).exec();
+        const existingFile = await FileModel.findOne({name: name}).exec();
         if (existingFile) {
-            return res.status(400).send({ message: "Le nom du fichier est déjà utilisé." });
+            return res.status(400).send({message: "Le nom du fichier est déjà utilisé."});
         }
 
-        const fileData = req.files.file;
+        const fileData = req.files?.file;
 
         if (!fileData) {
-            return res.status(400).send({ message: "Aucun fichier n'a été envoyé." });
+            return res.status(400).send({message: "Aucun fichier n'a été envoyé."});
         }
 
         if (fileData.mimetype !== 'application/pdf') {
-            return res.status(400).send({ message: "Le fichier doit être au format PDF." });
+            return res.status(400).send({message: "Le fichier doit être au format PDF."});
         }
 
-        const dir = path.join(__dirname, `../users/${username}/files`);
-        if (!fs.existsSync(dir)) {
-            fs.mkdirSync(dir, { recursive: true });
-        }
+        // **Amélioration : Stocker les fichiers sous le répertoire 'uploads'**
+        const dir = path.join(__dirname, '..', 'users', username, 'files');
 
-        const filePath = path.join(dir, fileData.name);
+        // Créer le répertoire s'il n'existe pas
+        await fs.promises.mkdir(dir, {recursive: true});
 
-        if (fs.existsSync(filePath)) {
-            return res.status(400).send({ message: "Le fichier existe déjà." });
-        }
+        // Générer un nom de fichier unique pour éviter les conflits
+        const timestamp = Date.now();
+        const sanitizedFileName = fileData.name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_.-]/g, '');
+        const fileName = `${timestamp}_${sanitizedFileName}`;
 
+        const filePath = path.join(dir, fileName);
+
+        // Déplacer le fichier uploadé vers le chemin défini
         await fileData.mv(filePath);
 
+        // Parse les champs JSON
         pactolsLieux = JSON.parse(pactolsLieux);
         pactolsSujets = JSON.parse(pactolsSujets);
-        const lieuxIdentifiers = pactolsLieux.map(lieu => lieu.identifier);
-        const sujetsIdentifiers = pactolsSujets.map(sujet => sujet.identifier);
+        coOwnersIds = coOwnersIds ? JSON.parse(coOwnersIds) : [];
+        invitedCoAuthors = invitedCoAuthors ? JSON.parse(invitedCoAuthors) : [];
 
-        let user = await User.findOne({ username: username }).exec();
+        const lieuxIdentifiers = pactolsLieux.map(lieu => lieu);
+        const sujetsIdentifiers = pactolsSujets.map(sujet => sujet);
+
+        const user = await User.findOne({username: username}).exec();
         if (!user) {
-            return res.status(400).send({ message: "Utilisateur non trouvé." });
+            return res.status(400).send({message: "Utilisateur non trouvé."});
         }
 
+        // Lecture du contenu du PDF
         const dataBuffer = fs.readFileSync(filePath);
         const pdfData = await pdfParse(dataBuffer);
         const pdfText = pdfData.text;
 
+        // **Création du nouveau fichier dans la base de données**
         const newFile = await FileModel.create({
             name,
             description,
             date_publication: date_creation,
-            file_name: fileData.name,
+            file_name: fileName,
             pactolsLieux: lieuxIdentifiers,
             pactolsSujets: sujetsIdentifiers,
             owner: user._id,
             pdfText
         });
 
+        // Ajouter le fichier à la liste des fichiers de l'utilisateur
         user.files.push(newFile._id);
         await user.save();
 
-        if (coOwnersIds) {
-            coOwnersIds = JSON.parse(coOwnersIds);
-            coOwners = await Promise.all(coOwnersIds.map(_id => User.findOne({ _id: _id })));
-            if(coOwners.length !== 0) {
-                for (const coOwner of coOwners) {
+        // Gestion des co-propriétaires
+        if (coOwnersIds.length > 0) {
+            for (const coOwnerId of coOwnersIds) {
+                const coOwner = await User.findById(coOwnerId);
+                if (coOwner) {
                     newFile.coOwners.push(coOwner._id);
                     coOwner.files.push(newFile._id);
                     await coOwner.save();
                 }
             }
+            await newFile.save();
         }
 
-        if (invitedCoAuthors) {
-            invitedCoAuthors = JSON.parse(invitedCoAuthors);
-            for(const invitedCoAuthor of invitedCoAuthors) {
-                const invitedUser = await User.findOne({ email: invitedCoAuthor.email });
+        // Gestion des co-auteurs invités
+        if (invitedCoAuthors.length > 0) {
+            for (const invitedCoAuthor of invitedCoAuthors) {
+                const invitedUser = await User.findOne({email: invitedCoAuthor.email});
                 if (!invitedUser) {
-                    const coOnwers = await InvitedCoAuthor.create({
+                    const coAuthor = await InvitedCoAuthor.create({
                         email: invitedCoAuthor.email,
                         firstname: invitedCoAuthor.firstname,
                         lastname: invitedCoAuthor.lastname,
                     });
-                    newFile.coOwners.push(coOnwers._id);
+                    newFile.invitedCoAuthors.push(coAuthor._id);
                     await newFile.save();
+
+                    // Envoi de l'email d'invitation
                     const mailOptions = {
-                        from: '"Datark invitation" <no-reply@datark.com>',
+                        from: '"Datark Invitation" <no-reply@datark.com>',
                         to: invitedCoAuthor.email,
                         subject: 'Invitation à rejoindre Datark',
-                        html: `<p>Bonjour,</p>
-                            <p>Vous avez été invité à rejoindre Datark pour collaborer sur un fichier.</p>
-                            <p>Inscrivez-vous avec votre email : ${invitedCoAuthor.email}, afin de créer votre profile.</p>
+                        html: `<p>Bonjour ${invitedCoAuthor.firstname},</p>
+                            <p>Vous avez été invité(e) à rejoindre Datark pour collaborer sur un fichier.</p>
+                            <p>Inscrivez-vous avec votre email : ${invitedCoAuthor.email}, afin de créer votre profil.</p>
                             <a href="${process.env.FRONTEND_URL}/signup">S'inscrire</a>
-                            <p>Lien: <a href="${process.env.FRONTEND_URL}/signup">${process.env.FRONTEND_URL}/signup</a></p>
                             <p>Cordialement,</p>
                             <p>L'équipe Datark</p>`
-                    }
-                    await transporter.sendMail(mailOptions, function (error, info) {
-                        if (error) {
-                            console.log(error);
-                            return res.status(400).send({message: "Une erreur est survenue lors de l'envoi du mail."});
-                        } else {
-                            console.log('Email sent: ' + info.response);
-                        }
-                    });
+                    };
+                    await transporter.sendMail(mailOptions);
                 }
             }
         }
 
+        // **Envoi du fichier à Copyleaks**
         const apiKey = process.env.COPYLEAKS_API_KEY;
         const email = process.env.COPYLEAKS_EMAIL;
 
+        try {
+            // Authentification avec Copyleaks
+            const authResponse = await axios.post("https://id.copyleaks.com/v3/account/login/api", {
+                email: email,
+                key: apiKey
+            }, {
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            });
 
-        await axios.post("https://id.copyleaks.com/v3/account/login/api", {
-            email: email,
-            key: apiKey
-        }, {
-            headers: {
-                'Content-Type': 'application/json',
-            }
-        }).then(async response => {
-            const access_token = response.data.access_token;
+            const accessToken = authResponse.data.access_token;
 
-            const dataBuffer = fs.readFileSync(filePath);
-            const data = await pdfParse(dataBuffer);
-            const numPages = data.numpages;
-
-            const selectPages = (numPages) => {
-                let pages = [];
-                if (numPages <= 10) pages = [2, 4, 7];
-                else if (numPages <= 25) pages = [13, 16, 19];
-                else if (numPages <= 50) pages = [22, 32, 42];
-                else if (numPages <= 100) pages = [20, 40, 60];
-                else if (numPages <= 150) pages = [40, 80, 130];
-                else if (numPages <= 200) pages = [50, 100, 150];
-                else if (numPages <= 300) pages = [50, 150, 250];
-                else if (numPages <= 400) pages = [150, 250, 300];
-                else if (numPages <= 500) pages = [80, 180, 300];
-                else pages = [80, 180, 300]; // For more than 500 pages
-
-                return pages.filter(page => page <= numPages);
-                // Explication détaillé de  pages.filter(page => page <= numPages); :
-                // page est un élément du tableau pages, et on ne garde que les éléments inférieurs ou égaux à numPages
-                // numPages est le nombre total de pages du document PDF
-                // SI numPages <= 10, on garde les pages 2, 4 et 7
-                // Mais que le docs a 5 pages, on garde les pages 2 et 4
-            };
-
+            // Sélection des pages pour l'analyse
+            const numPages = pdfData.numpages;
             const selectedPages = selectPages(numPages);
 
-            // Charger le document PDF d'origine
-            const pdfDoc = await PDFDocument.load(dataBuffer);
-            // Créer un nouveau document PDF
-            const newPdfDoc = await PDFDocument.create();
+            // Création d'un nouveau PDF avec les pages sélectionnées
+            const newPdfDoc = await createPdfWithSelectedPages(dataBuffer, selectedPages);
 
-            // Copier les pages sélectionnées dans le nouveau document PDF
-            for (const pageNum of selectedPages) {
-                if (pageNum <= numPages) {
-                    const [copiedPage] = await newPdfDoc.copyPages(pdfDoc, [pageNum - 1]);
-                    newPdfDoc.addPage(copiedPage);
-                }
-            }
+            // Conversion du PDF en base64
+            const newPdfBase64 = Buffer.from(newPdfDoc).toString('base64');
 
-            // Sauvegarder le nouveau document PDF
-            const newPdfBytes = await newPdfDoc.save();
-            const newPdfBase64 = Buffer.from(newPdfBytes).toString('base64');
-
+            // Préparation de la requête à Copyleaks
             const copyleaksUrl = `https://api.copyleaks.com/v3/scans/submit/file/${newFile._id}`;
             const copyleaksHeaders = {
-                'Authorization': `Bearer ${access_token}`,
+                'Authorization': `Bearer ${accessToken}`,
                 'Content-Type': 'application/json',
             };
             const copyleaksBody = {
                 base64: newPdfBase64,
-                filename: fileData.name,
+                filename: fileName,
                 sandbox: true,
                 aiGeneratedText: true,
                 properties: {
                     webhooks: {
-                        status: process.env.BACKEND_URL+'/api/webhooks/copyleaks'
+                        status: `${process.env.BACKEND_URL}/api/webhooks/copyleaks`
                     }
                 }
             };
 
-            await axios.put(copyleaksUrl, copyleaksBody, { headers: copyleaksHeaders }).then(response => {
-                console.log('Copyleaks response:', response);
-                res.status(200).send({ message: "Le fichier a bien été créé et envoyé à Copyleaks.", file: newFile });
-            }).catch(error => {
-                console.error('Copyleaks error PUT:', error.response ? error.response.data : error.message);
-            });
-        }).catch(error => {
-            console.error('Copyleaks error POST :', error.response ? error.response.data : error.message);
-        });
+            // Envoi du fichier à Copyleaks
+            await axios.put(copyleaksUrl, copyleaksBody, {headers: copyleaksHeaders});
+
+        } catch (error) {
+            console.error('Erreur lors de l\'intégration avec Copyleaks :', error.response ? error.response.data : error.message);
+        }
+
+        res.status(200).send({message: "Le fichier a bien été créé", file: newFile});
 
     } catch (error) {
-        console.error('Error during file upload:', error);
-        res.status(500).send({ message: "Erreur serveur." });
+        console.error('Erreur lors du téléchargement du fichier :', error);
+        res.status(500).send({message: "Erreur serveur."});
     }
+}
+
+// Fonctions auxiliaires
+
+function selectPages(numPages) {
+    let pages = [];
+    if (numPages <= 10) pages = [2, 4, 7];
+    else if (numPages <= 25) pages = [13, 16, 19];
+    else if (numPages <= 50) pages = [22, 32, 42];
+    else if (numPages <= 100) pages = [20, 40, 60];
+    else if (numPages <= 150) pages = [40, 80, 130];
+    else if (numPages <= 200) pages = [50, 100, 150];
+    else if (numPages <= 300) pages = [50, 150, 250];
+    else if (numPages <= 400) pages = [150, 250, 300];
+    else if (numPages <= 500) pages = [80, 180, 300];
+    else pages = [80, 180, 300]; // Pour plus de 500 pages
+
+    // Ne garder que les pages qui existent dans le document
+    return pages.filter(page => page <= numPages);
 }
 
 async function getAll(req, res) {
@@ -276,9 +270,9 @@ async function getAll(req, res) {
 
 async function getById(req, res) {
     const id = req.params.id;
-    const file = await FileModel.findOne({ _id: id  }).populate('owner').populate('likedBy').exec();
+    const file = await FileModel.findOne({_id: id}).populate('owner').populate('likedBy').exec();
     if (file === null) {
-        return res.status(400).send({message : "Fichier non trouvé."});
+        return res.status(400).send({message: "Fichier non trouvé."});
     }
     return res.status(200).send(file);
 }
@@ -289,24 +283,24 @@ async function edit(req, res) {
     let username = req.username;
 
     if (username === null) {
-        return res.status(400).send({message : "Utilisateur non trouvé."});
+        return res.status(400).send({message: "Utilisateur non trouvé."});
     }
 
-    if (!name && !description && !date_creation  && !pactolsLieux && !pactolsSujets) {
-        return res.status(400).send({message : "Veuillez remplir au moins un champ."});
+    if (!name && !description && !date_creation && !pactolsLieux && !pactolsSujets) {
+        return res.status(400).send({message: "Veuillez remplir au moins un champ."});
     }
 
     isNewVersion === 'true' ? isNewVersion = true : isNewVersion = false;
     wantRewrite === 'true' ? wantRewrite = true : wantRewrite = false;
 
-    const file = await FileModel.findOne({ _id: fileId }).populate('owner').exec();
+    const file = await FileModel.findOne({_id: fileId}).populate('owner').exec();
 
     if (file === null) {
-        return res.status(400).send({message : "Fichier non trouvé."});
+        return res.status(400).send({message: "Fichier non trouvé."});
     }
 
     if (file.owner.username !== username) {
-        return res.status(400).send({message : "Vous n'êtes pas le propriétaire du fichier."});
+        return res.status(400).send({message: "Vous n'êtes pas le propriétaire du fichier."});
     }
 
     if (name) {
@@ -333,11 +327,11 @@ async function edit(req, res) {
         file.pactolsSujets = sujets;
     }
 
-    if(isNewVersion) {
+    if (isNewVersion) {
         //check if file have already versions
         const versions = await file.getVersions();
         const dir = path.join(__dirname, '../Users/' + username + '/files/' + file.file_name + '/versions');
-        if (!fs.existsSync(dir)){
+        if (!fs.existsSync(dir)) {
             fs.mkdirSync(dir);
         }
         let versionName = 'Version-' + versions.length + 1;
@@ -345,31 +339,31 @@ async function edit(req, res) {
         const fileData = req.files.file;
         const fileName = versionName + '.pdf';
         const filePath = dir + '/' + versionName + '/' + fileName;
-        fileData.mv(filePath, function(err) {
+        fileData.mv(filePath, function (err) {
             if (err) {
-                return res.status(500).send({message : "Erreur lors de l'upload du fichier."});
+                return res.status(500).send({message: "Erreur lors de l'upload du fichier."});
             }
         });
 
-        const newVersion = await Version.create({ name: versionName});
+        const newVersion = await Version.create({name: versionName});
         newVersion.setFile(file);
-    } else if(wantRewrite) {
+    } else if (wantRewrite) {
         const fileData = req.files.file;
         const fileName = fileData.name;
-        let dir = path.join(__dirname, '../Users/' + userId + '/files');
-        if(fileName.includes("Version-")) {
-            dir = path.join(__dirname, '../Users/' + userId + '/files/versions');
+        let dir = path.join(__dirname, '..', 'users', username, 'files');
+        if (fileName.includes("Version-")) {
+            dir = path.join(__dirname, '..', 'users', username, 'files', 'versions');
         }
 
         const filePath = dir + '/' + fileName;
-        fileData.mv(filePath, function(err) {
+        fileData.mv(filePath, function (err) {
             if (err) {
-                return res.status(500).send({message : "Erreur lors de l'upload du fichier."});
+                return res.status(500).send({message: "Erreur lors de l'upload du fichier."});
             }
         });
     }
     const result = await file.save();
-    return res.status(200).send({message : "Le fichier a bien été modifié."});
+    return res.status(200).send({message: "Le fichier a bien été modifié."});
 }
 
 async function searchFiles(req, res) {
@@ -379,7 +373,7 @@ async function searchFiles(req, res) {
     const skip = (page - 1) * limit; // Calcul de l'offset
 
     if (!searchString) {
-        return res.status(400).send({ message: "Aucun critère de recherche fourni." });
+        return res.status(400).send({message: "Aucun critère de recherche fourni."});
     }
 
     let words = searchString.split(' ');
@@ -388,13 +382,13 @@ async function searchFiles(req, res) {
         // Construction de la condition de recherche pour chaque mot
         let searchConditions = words.map(word => ({
             $or: [
-                { name: new RegExp(word, 'i') }, // Utilisation de RegExp directement
-                { description: new RegExp(word, 'i') },
-                { 'owner.firstname': new RegExp(word, 'i') },
-                { 'owner.lastname': new RegExp(word, 'i') },
-                { pactolsLieux: { $in: [word] } },
-                { pactolsSujets: { $in: [word] } },
-                { pdfText: new RegExp(word, 'i') }
+                {name: new RegExp(word, 'i')}, // Utilisation de RegExp directement
+                {description: new RegExp(word, 'i')},
+                {'owner.firstname': new RegExp(word, 'i')},
+                {'owner.lastname': new RegExp(word, 'i')},
+                {pactolsLieux: {$in: [word]}},
+                {pactolsSujets: {$in: [word]}},
+                {pdfText: new RegExp(word, 'i')}
             ]
         }));
 
@@ -411,9 +405,9 @@ async function searchFiles(req, res) {
         // Persee conditions, avoiding RegExp for ObjectId fields
         const perseeConditions = words.map(word => ({
             $or: [
-                { name: new RegExp(word, 'i') }, // Utilisation de RegExp directement
-                { description: new RegExp(word, 'i') },
-                { owner: word } // Assuming owner is a string in Persee
+                {name: new RegExp(word, 'i')}, // Utilisation de RegExp directement
+                {description: new RegExp(word, 'i')},
+                {owner: word} // Assuming owner is a string in Persee
             ]
         }));
 
@@ -443,20 +437,20 @@ async function searchFiles(req, res) {
         const combinedResults = [...searchResults, ...transformedResults];
 
         // Calcul du nombre total d'éléments (sans pagination)
-        const totalItemsPromise = FileModel.countDocuments({ $and: searchConditions });
-        const totalPerseeItemsPromise = Persee.countDocuments({ $and: perseeConditions });
+        const totalItemsPromise = FileModel.countDocuments({$and: searchConditions});
+        const totalPerseeItemsPromise = Persee.countDocuments({$and: perseeConditions});
         const [totalItems, totalPerseeItems] = await Promise.all([totalItemsPromise, totalPerseeItemsPromise]);
         const totalCombinedItems = totalItems + totalPerseeItems;
-        if(req.username) {
+        if (req.username) {
             // Get User
             try {
-                const user = await User.findOne({ username: req.username }).exec();
+                const user = await User.findOne({username: req.username}).exec();
                 if (user) {
                     const url = req.originalUrl.replace("/api/file/", "/")
                     // check if originalUrl is no't already in history table
-                    if(!user.history.includes(url)) {
-                    user.history.push(url);
-                    await user.save();
+                    if (!user.history.includes(url)) {
+                        user.history.push(url);
+                        await user.save();
                     }
                 }
             } catch (err) {
@@ -471,15 +465,15 @@ async function searchFiles(req, res) {
         });
     } catch (error) {
         console.error(error);
-        return res.status(500).send({ message: "Erreur lors de la recherche des fichiers.", error });
+        return res.status(500).send({message: "Erreur lors de la recherche des fichiers.", error});
     }
 }
 
 async function searchComplexFiles(req, res) {
     try {
         // Extraction des critères de recherche à partir des paramètres de la requête
-        let { datePublication, owners, pactolsLieux, pactolsSujets, searchString, page = 1, limit = 10 } = req.query;
-        console.log('Search criteria:', { datePublication, owners, pactolsLieux, pactolsSujets, searchString });
+        let {datePublication, owners, pactolsLieux, pactolsSujets, searchString, page = 1, limit = 10} = req.query;
+        console.log('Search criteria:', {datePublication, owners, pactolsLieux, pactolsSujets, searchString});
         const skip = (page - 1) * limit;
 
         let searchFilter = {};
@@ -506,7 +500,7 @@ async function searchComplexFiles(req, res) {
         // Filtrage par propriétaires (owners)
         if (owners) {
             // check if owners is a string
-            if(owners instanceof String) {
+            if (owners instanceof String) {
                 owners = [owners];
             }
             if (!Array.isArray(owners)) {
@@ -515,7 +509,7 @@ async function searchComplexFiles(req, res) {
             if (owners.length > 0) {
                 const ownerConditions = owners.map(owner => ({
                     $or: [
-                        { 'owner.label': { $regex: owner, $options: 'i' } },
+                        {'owner.label': {$regex: owner, $options: 'i'}},
                     ]
                 }));
                 searchFilter.$or = (searchFilter.$or || []).concat(ownerConditions);
@@ -526,7 +520,7 @@ async function searchComplexFiles(req, res) {
         if (pactolsLieux && pactolsLieux.length > 0) {
             const pactolLieuxArray = pactolsLieux.split(',').map(lieu => lieu.trim());
             if (pactolLieuxArray.length > 0) {
-                searchFilter.pactolsLieux = { $in: pactolLieuxArray };
+                searchFilter.pactolsLieux = {$in: pactolLieuxArray};
             }
         }
 
@@ -534,7 +528,7 @@ async function searchComplexFiles(req, res) {
         if (pactolsSujets && pactolsSujets.length > 0) {
             const pactolSujetsArray = pactolsSujets.split(',').map(sujet => sujet.trim());
             if (pactolSujetsArray.length > 0) {
-                searchFilter.pactolsSujets = { $in: pactolSujetsArray };
+                searchFilter.pactolsSujets = {$in: pactolSujetsArray};
             }
         }
 
@@ -543,9 +537,9 @@ async function searchComplexFiles(req, res) {
         if (words.length > 0) {
             const wordConditions = words.map(word => ({
                 $or: [
-                    { name: { $regex: word, $options: 'i' } },
-                    { description: { $regex: word, $options: 'i' } },
-                    { pdfText: { $regex: word, $options: 'i' } } // Include PDF text in search
+                    {name: {$regex: word, $options: 'i'}},
+                    {description: {$regex: word, $options: 'i'}},
+                    {pdfText: {$regex: word, $options: 'i'}} // Include PDF text in search
                 ]
             }));
             searchFilter.$or = (searchFilter.$or || []).concat(wordConditions);
@@ -568,36 +562,36 @@ async function searchComplexFiles(req, res) {
         if (words.length > 0) {
             const perseeWordConditions = words.map(word => ({
                 $or: [
-                    { name: { $regex: word, $options: 'i' } },
-                    { description: { $regex: word, $options: 'i' } },
+                    {name: {$regex: word, $options: 'i'}},
+                    {description: {$regex: word, $options: 'i'}},
                 ]
             }));
-            perseeConditions.push({ $or: perseeWordConditions });
+            perseeConditions.push({$or: perseeWordConditions});
         }
 
         if (pactolWords.length > 0) {
             const pactolConditions = pactolWords.map(word => ({
                 $or: [
-                    { name: { $regex: word, $options: 'i' } },
-                    { description: { $regex: word, $options: 'i' } }
+                    {name: {$regex: word, $options: 'i'}},
+                    {description: {$regex: word, $options: 'i'}}
                 ]
             }));
-            perseeConditions.push({ $or: pactolConditions });
+            perseeConditions.push({$or: pactolConditions});
         }
 
-        if(owners) {
+        if (owners) {
             if (owners.length > 0) {
                 const ownerConditions = owners.map(owner => ({
                     $or: [
-                        { owner: { $regex: owner, $options: 'i' } },
+                        {owner: {$regex: owner, $options: 'i'}},
                     ]
                 }));
-                perseeConditions.push({ $or: ownerConditions });
+                perseeConditions.push({$or: ownerConditions});
             }
         }
         console.log('Persee conditions:', perseeConditions);
         // Requête pour Persee
-        const perseeResultsPromise = perseeConditions.length > 0 ? Persee.find({ $and: perseeConditions })
+        const perseeResultsPromise = perseeConditions.length > 0 ? Persee.find({$and: perseeConditions})
             .select('name description date_publication url owner status createdAt updatedAt')
             .skip(skip)
             .limit(limit)
@@ -624,14 +618,14 @@ async function searchComplexFiles(req, res) {
 
         // Calcul du nombre total d'éléments
         const totalItemsPromise = FileModel.countDocuments(searchFilter);
-        const totalPerseeItemsPromise = Persee.countDocuments({ $and: perseeConditions });
+        const totalPerseeItemsPromise = Persee.countDocuments({$and: perseeConditions});
         const [totalItems, totalPerseeItems] = await Promise.all([totalItemsPromise, totalPerseeItemsPromise]);
         const totalCombinedItems = totalItems + totalPerseeItems;
 
         // Mise à jour de l'historique de l'utilisateur si connecté
         if (req.username) {
             try {
-                const user = await User.findOne({ username: req.username }).exec();
+                const user = await User.findOne({username: req.username}).exec();
                 if (user) {
                     const url = req.originalUrl.replace("/api/file/", "/");
                     if (!user.history.includes(url)) {
@@ -653,7 +647,7 @@ async function searchComplexFiles(req, res) {
         });
     } catch (error) {
         console.error('Erreur lors de la recherche des fichiers:', error);
-        return res.status(500).send({ message: "Erreur lors de la recherche des fichiers.", error });
+        return res.status(500).send({message: "Erreur lors de la recherche des fichiers.", error});
     }
 }
 
@@ -661,7 +655,7 @@ async function getUsersWithFiles(req, res) {
     const files = await FileModel.find({}).lean();
     let userIds = files.reduce((acc, file) => {
         acc.add(file.owner.toString()); // Ajouter le propriétaire
-        if(file.coOwners) {
+        if (file.coOwners) {
             file.coOwners.forEach(coOwner => acc.add(coOwner.toString())); // Ajouter les co-propriétaires
         }
         return acc;
@@ -671,7 +665,7 @@ async function getUsersWithFiles(req, res) {
     userIds = [...userIds];
 
     // Trouver les utilisateurs correspondant aux ID récupérés
-    const users = await User.find({ '_id': { $in: userIds } }, 'firstname lastname username');
+    const users = await User.find({'_id': {$in: userIds}}, 'firstname lastname username');
 
     res.json(users); // Envoyer la liste des utilisateurs en réponse
 }
@@ -688,7 +682,7 @@ async function download(req, res) {
     }
 
     const filePath = path.join(__dirname, '../users/' + file.owner.username + `/files/${file.file_name}/${file.file_name}`);
-    if(username) {
+    if (username) {
         const user = await User.findOne({username: username}).exec();
         if (!user) {
             return res.status(404).send({message: "Utilisateur non trouvé."});
@@ -734,13 +728,13 @@ async function deleteFile(req, res) {
     const id = req.params.id;
 
     try {
-        const file = await FileModel.findOne({ _id: id }).populate('owner').exec();
+        const file = await FileModel.findOne({_id: id}).populate('owner').exec();
         if (!file) {
-            return res.status(404).send({ message: "Fichier non trouvé." });
+            return res.status(404).send({message: "Fichier non trouvé."});
         }
 
         if (file.owner.username !== req.username) {
-            return res.status(400).send({ message: "Vous n'êtes pas le propriétaire du fichier." });
+            return res.status(400).send({message: "Vous n'êtes pas le propriétaire du fichier."});
         }
 
         const filePath = path.join(__dirname, '../users/', file.owner.username, `/files/${file.file_name}`);
@@ -749,21 +743,51 @@ async function deleteFile(req, res) {
         fs.unlink(filePath, async (err) => {
             if (err) {
                 console.error(err);
-                return res.status(500).send({ message: "Erreur lors de la suppression du fichier." });
+                return res.status(500).send({message: "Erreur lors de la suppression du fichier."});
             }
 
             // Remove the file document from the database
             try {
-                await FileModel.deleteOne({ _id: id });
-                return res.status(200).send({ message: "Le fichier a bien été supprimé." });
+                await FileModel.deleteOne({_id: id});
+                return res.status(200).send({message: "Le fichier a bien été supprimé."});
             } catch (deleteErr) {
                 console.error(deleteErr);
-                return res.status(500).send({ message: "Erreur lors de la suppression de l'enregistrement du fichier." });
+                return res.status(500).send({message: "Erreur lors de la suppression de l'enregistrement du fichier."});
             }
         });
     } catch (err) {
         console.error(err);
-        return res.status(500).send({ message: "Erreur interne du serveur." });
+        return res.status(500).send({message: "Erreur interne du serveur."});
     }
 }
-module.exports = { upload, getAll, getById, edit, searchFiles, searchComplexFiles, download, deleteFile, getUsersWithFiles };
+
+async function createPdfWithSelectedPages(dataBuffer, selectedPages) {
+    const pdfDoc = await PDFDocument.load(dataBuffer);
+    const newPdfDoc = await PDFDocument.create();
+
+    for (const pageNum of selectedPages) {
+        if (pageNum <= pdfDoc.getPageCount()) {
+            const [copiedPage] = await newPdfDoc.copyPages(pdfDoc, [pageNum - 1]);
+            newPdfDoc.addPage(copiedPage);
+        }
+    }
+
+    return await newPdfDoc.save();
+}
+
+function sanitizeUsername(username) {
+    return username.replace(/[^a-zA-Z0-9_-]/g, '');
+}
+
+
+module.exports = {
+    upload,
+    getAll,
+    getById,
+    edit,
+    searchFiles,
+    searchComplexFiles,
+    download,
+    deleteFile,
+    getUsersWithFiles
+};

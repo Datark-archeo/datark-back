@@ -3,7 +3,7 @@ const path = require("path")
 const fileExtLimiter = (allowedExtArray) => {
     return (req, res, next) => {
         const files = req.files
-        if(!files) return next();
+        if (!files) return next();
         const fileExtensions = []
         Object.keys(files).forEach(key => {
             fileExtensions.push(path.extname(files[key].name))
@@ -15,7 +15,7 @@ const fileExtLimiter = (allowedExtArray) => {
         if (!allowed) {
             const message = `Upload failed. Only ${allowedExtArray.toString()} files allowed.`.replaceAll(",", ", ");
 
-            return res.status(422).json({ status: "error", message });
+            return res.status(422).json({status: "error", message});
         }
 
         next()

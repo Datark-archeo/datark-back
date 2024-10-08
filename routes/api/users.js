@@ -90,6 +90,43 @@ router.route('/banner')
 
 /**
  * @swagger
+ * tags:
+ *   name: Utilisateurs
+ *   description: Gestion des utilisateurs
+ */
+
+/**
+ * @swagger
+ * /users/change-password:
+ *   post:
+ *     summary: Change le mot de passe de l'utilisateur authentifié
+ *     tags:
+ *       - Utilisateurs
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       description: Ancien et nouveau mot de passe
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/ChangePassword'
+ *     responses:
+ *       '200':
+ *         description: Mot de passe mis à jour avec succès
+ *       '400':
+ *         description: Requête invalide
+ *       '401':
+ *         description: Non autorisé
+ *       '500':
+ *         description: Erreur serveur
+ */
+
+router.post('/change-password', verifyJWT, userController.changePassword);
+
+
+/**
+ * @swagger
  * /users/profile/{id}:
  *   get:
  *     summary: Get user by ID
@@ -398,7 +435,6 @@ router.route('/like-file')
 
 router.route('/unlike-file')
     .post(verifyJWT, userController.unlikeFile);
-
 
 
 module.exports = router;
