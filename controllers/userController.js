@@ -527,13 +527,12 @@ function resetPassword(req, res) {
                 if (error) {
                     return res.status(400).send({message: "Une erreur est survenue lors de l'envoi du mail."});
                 } else {
-                    console.log('Email sent: ' + info.response);
                     return res.status(200).send({message: "Un mail de réinitialisation de mot de passe a été envoyé."});
                 }
             });
         });
     } catch (error) {
-        console.log(error);
+        console.error(error);
         return res.status(400).send({message: "Une erreur est survenue."});
     }
 }
@@ -636,10 +635,9 @@ async function resendEmailVerification(req, res) {
     };
     await transporter.sendMail(mailOptions, function (error, info) {
         if (error) {
-            console.log(error);
+            console.error(error);
             return res.status(400).send({message: "Une erreur est survenue lors de l'envoi du mail."});
         } else {
-            console.log('Email sent: ' + info.response);
             return res.status(200).send({message: "Un nouveau mail de vérification a été envoyé."});
         }
     });
@@ -1121,7 +1119,7 @@ function editProfileBanner(req, res) {
                 });
                 return res.status(400).send({message: "Utilisateur introuvable."});
             }
-
+            print(file);
             // Supprime l'ancienne bannière si elle existe et n'est pas une bannière par défaut
             if (user.profileBanner && !user.profileBanner.startsWith('assets/img/banner_pictures/')) {
                 const oldBannerPath = path.join(__dirname, '..', user.profileBanner);
@@ -1135,7 +1133,7 @@ function editProfileBanner(req, res) {
             // Met à jour le profil avec le chemin de la nouvelle image
             const baseUrl = process.env.BACKEND_URL || 'http://localhost:3000';
             user.profileBanner = `${baseUrl}/banners/ + ${file.filename}`;
-            
+
             user.save().then(() => {
                 return res.status(200).send({message: "Bannière de profil modifiée", bannerUrl: user.profileBanner});
             }).catch((err) => {
