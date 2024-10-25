@@ -133,6 +133,7 @@ async function edit(req, res) {
     // Sanitiser le nom d'utilisateur
     const safeUsername = sanitizeUsername(user.username);
 
+
     // Si l'utilisateur veut changer son email
     if (body.newEmail) {
         if (!body.confirmEmail) {
@@ -173,14 +174,17 @@ async function edit(req, res) {
     // Si l'utilisateur veut changer sa photo de profil
     if (body.profilePicture) {
         try {
-            const imageDir = path.join(__dirname, '..', 'uploads', 'users', safeUsername, 'profile');
+            const imageDir = path.join(process.cwd(), 'users', safeUsername, 'profile');
 
             // Créer le répertoire s'il n'existe pas
             await fs.promises.mkdir(imageDir, {recursive: true});
 
-            let filename;
 
             if (body.profilePicture.startsWith('data:image/')) {
+                // L'utilisateur a uploadé une nouvelle image
+                // Supprimer l'ancienne image de profil si ce n'est pas une image par défaut
+                await deleteCurrentProfilePicture(user);
+
                 // Traitement de l'image encodée en base64
                 const matches = body.profilePicture.match(/^data:image\/([a-zA-Z]+);base64,(.+)$/);
                 if (!matches || matches.length !== 3) {
@@ -199,7 +203,7 @@ async function edit(req, res) {
                 const buffer = Buffer.from(imageData, 'base64');
 
                 // Génération du nom de fichier
-                filename = `profile.${imageType}`;
+                const filename = `profile.${imageType}`;
 
                 const imagePath = path.join(imageDir, filename);
 
@@ -210,7 +214,7 @@ async function edit(req, res) {
 
                 // Mise à jour du chemin de l'image de profil
                 const baseUrl = process.env.BACKEND_URL || 'http://localhost:3000';
-                user.profilePicture = `${baseUrl}/uploads/users/${safeUsername}/profile/${filename}`;
+                user.profilePicture = `${baseUrl}/api/user/${user.username}/profile/${filename}`;
             } else {
                 // Traitement des images de profil par défaut
                 const defaultImages = [
@@ -251,23 +255,11 @@ async function edit(req, res) {
                 if (!defaultImages.includes(body.profilePicture)) {
                     return res.status(400).send({message: "Image de profil non valide."});
                 }
+                await deleteCurrentProfilePicture(user);
 
-                // Copier l'image par défaut dans le répertoire de l'utilisateur
-                const sourceImagePath = path.join(__dirname, '..', 'public', body.profilePicture.replace(`${process.env.FRONTEND_URL}`, ''));
-                filename = path.basename(sourceImagePath);
-                const destinationImagePath = path.join(imageDir, filename);
-
-                // Vérifier si le fichier source existe
-                if (!fs.existsSync(sourceImagePath)) {
-                    return res.status(400).send({message: "Image de profil par défaut introuvable."});
-                }
-
-                // Copier le fichier
-                await fs.promises.copyFile(sourceImagePath, destinationImagePath);
-
-                // Mise à jour du chemin de l'image de profil
+                // Mise à jour du chemin de l'image de profil pour pointer vers l'image par défaut
                 const baseUrl = process.env.BACKEND_URL || 'http://localhost:3000';
-                user.profilePicture = `${baseUrl}/uploads/users/${safeUsername}/profile/${filename}`;
+                user.profilePicture = `${baseUrl}/${body.profilePicture}`; // Assurez-vous que le chemin est correct
             }
         } catch (error) {
             console.error("Erreur lors du traitement de la photo de profil :", error);
@@ -277,6 +269,18 @@ async function edit(req, res) {
 
     await user.save();
     return res.status(200).send({message: "L'utilisateur a bien été modifié."});
+}
+
+async function deleteCurrentProfilePicture(user) {
+    if (user.profilePicture) {
+        // Obtenir le chemin du fichier de l'image de profil actuelle
+        const currentProfilePicPath = path.join(__dirname, '..', user.profilePicture.replace(`${process.env.BACKEND_URL}`, ''));
+
+        // Supprimer le fichier s'il existe
+        if (fs.existsSync(currentProfilePicPath)) {
+            await fs.promises.unlink(currentProfilePicPath);
+        }
+    }
 }
 
 /**
@@ -1156,7 +1160,8 @@ function editProfileBanner(req, res) {
             if (!user) {
                 return res.status(400).send({message: "Utilisateur introuvable."});
             }
-            user.profileBanner = profileBanner;
+            const baseUrl = process.env.BACKEND_URL || 'http://localhost:3000';
+            user.profileBanner = `${baseUrl}/${profileBanner}`;
             user.save().then(() => {
                 return res.status(200).send({message: "Bannière de profil modifiée"});
             }).catch(() => {

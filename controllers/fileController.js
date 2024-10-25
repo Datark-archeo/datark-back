@@ -330,7 +330,7 @@ async function edit(req, res) {
     if (isNewVersion) {
         //check if file have already versions
         const versions = await file.getVersions();
-        const dir = path.join(__dirname, '../Users/' + username + '/files/' + file.file_name + '/versions');
+        const dir = path.join(__dirname, '../users/' + username + '/files/' + file.file_name + '/versions');
         if (!fs.existsSync(dir)) {
             fs.mkdirSync(dir);
         }

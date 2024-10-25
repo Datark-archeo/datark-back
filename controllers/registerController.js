@@ -50,46 +50,14 @@ const handleNewUser = async (req, res) => {
         const safeUsername = sanitizeUsername(body.username);
 
         // **Définition du répertoire de sauvegarde**
-        const imageDir = path.join(__dirname, '..', 'users', safeUsername, 'profile');
+        const imageDir = path.join(process.cwd(), 'users', safeUsername, 'profile');
 
         // **Création du répertoire s'il n'existe pas**
         await fs.promises.mkdir(imageDir, {recursive: true});
 
         let filename;
         // Traitement de l'image de profil
-        if (body.profilePicture && body.profilePicture.startsWith('data:image/')) {
-            // Extraction des données base64
-            const matches = body.profilePicture.match(/^data:image\/([a-zA-Z]+);base64,(.+)$/);
-            if (!matches || matches.length !== 3) {
-                return res.status(400).send({message: "Format d'image invalide."});
-            }
-            const imageType = matches[1];
-            const imageData = matches[2];
-
-            // Validation du type d'image
-            const allowedImageTypes = ['png', 'jpg', 'jpeg', 'webp'];
-            if (!allowedImageTypes.includes(imageType.toLowerCase())) {
-                return res.status(400).send({message: "Type d'image non supporté."});
-            }
-
-            // Décodage des données base64
-            const buffer = Buffer.from(imageData, 'base64');
-
-            // Génération d'un nom de fichier unique
-            filename = `profile.${imageType}`;
-
-            const imagePath = path.join(imageDir, filename);
-
-            // Utilisation de sharp pour redimensionner et sauvegarder l'image
-            await sharp(buffer)
-                .resize(256, 256, {fit: 'cover'})
-                .toFile(imagePath);
-
-            // Mise à jour du chemin de l'image de profil
-            const baseUrl = process.env.BACKEND_URL || 'http://localhost:3000';
-            body.profilePicture = `${baseUrl}/uploads/users/${safeUsername}/profile/${filename}`;
-        } else {
-            // Validation de l'image de profil par défaut
+        if (body.profilePicture) {
             const defaultImages = [
                 `assets/img/profile_pictures/Default.webp`,
                 `assets/img/profile_pictures/Agrippa.webp`,
@@ -116,7 +84,6 @@ const handleNewUser = async (req, res) => {
                 `assets/img/profile_pictures/Marie_Curie.webp`,
                 `assets/img/profile_pictures/Napoleonien.webp`,
                 `assets/img/profile_pictures/Newton.webp`,
-                `assets/img/profile_pictures/Agrippa.webp`,
                 `assets/img/profile_pictures/Pericles.webp`,
                 `assets/img/profile_pictures/Platon.webp`,
                 `assets/img/profile_pictures/Scipion.webp`,
@@ -125,11 +92,50 @@ const handleNewUser = async (req, res) => {
                 `assets/img/profile_pictures/Vercingetorix.webp`,
                 // Ajoutez les autres images par défaut autorisées ici
             ];
-            if (!defaultImages.includes(body.profilePicture)) {
-                return res.status(400).send({message: "Image de profil non valide."});
+
+            if (body.profilePicture.startsWith('data:image/')) {
+                // L'utilisateur a uploadé une nouvelle image
+
+                // Extraction des données base64
+                const matches = body.profilePicture.match(/^data:image\/([a-zA-Z]+);base64,(.+)$/);
+                if (!matches || matches.length !== 3) {
+                    return res.status(400).send({message: "Format d'image invalide."});
+                }
+                const imageType = matches[1];
+                const imageData = matches[2];
+
+                // Validation du type d'image
+                const allowedImageTypes = ['png', 'jpg', 'jpeg', 'webp'];
+                if (!allowedImageTypes.includes(imageType.toLowerCase())) {
+                    return res.status(400).send({message: "Type d'image non supporté."});
+                }
+
+                // Décodage des données base64
+                const buffer = Buffer.from(imageData, 'base64');
+
+                // Génération du nom de fichier
+                const filename = `profile.${imageType}`;
+
+                const imagePath = path.join(imageDir, filename);
+
+                // Utilisation de sharp pour redimensionner et sauvegarder l'image
+                await sharp(buffer)
+                    .resize(256, 256, {fit: 'cover'})
+                    .toFile(imagePath);
+
+                // Mise à jour du chemin de l'image de profil
+                const baseUrl = process.env.BACKEND_URL || 'http://localhost:3000';
+                body.profilePicture = `${baseUrl}/api/user/${body.username}/profile/${filename}`;
+            } else {
+                // L'utilisateur a choisi une image par défaut
+                if (!defaultImages.includes(body.profilePicture)) {
+                    return res.status(400).send({message: "Image de profil non valide."});
+                }
+
+                // Mise à jour du chemin de l'image de profil pour pointer directement vers l'image par défaut
+                const baseUrl = process.env.BACKEND_URL || 'http://localhost:3000';
+                body.profilePicture = `${baseUrl}/${body.profilePicture}`;
             }
-            // Mise à jour du chemin de l'image de profil si nécessaire
-            body.profilePicture = `${process.env.FRONTEND_URL}/${body.profilePicture}`;
         }
 
         // Hachage du mot de passe

@@ -10,6 +10,8 @@ const router = express.Router();
 const userController = require('../../controllers/userController');
 const invitationController = require('../../controllers/invitationController');
 const verifyJWT = require('../../middleware/verifyJWT');
+const {join} = require("node:path");
+const {constants, access} = require("node:fs");
 
 /**
  * @swagger
@@ -436,5 +438,25 @@ router.route('/like-file')
 router.route('/unlike-file')
     .post(verifyJWT, userController.unlikeFile);
 
+router.route('/:username/profile/:filename').get((req, res) => {
+    const {username, filename} = req.params;
+
+    console.log(username, filename);
+    const filePath = join(process.cwd(), 'users', sanitizeUsername(username), 'profile', filename);
+
+    console.log(filePath);
+
+    access(filePath, constants.R_OK, (err) => {
+        if (err) {
+            return res.status(404).send('Image non trouvée');
+        }
+
+        res.sendFile(filePath);
+    });
+});
+
+function sanitizeUsername(username) {
+    return username.replace(/[^a-zA-Z0-9_-]/g, '');
+}
 
 module.exports = router;
