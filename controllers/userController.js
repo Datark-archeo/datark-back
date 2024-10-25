@@ -479,7 +479,7 @@ async function emailVerification(req, res) {
     await foundedUser.save();  // Ensure you wait for the save operation to complete
 
     // Redirect to frontend URL
-    return res.redirect(`login?register=success`); // Update with your actual frontend URL
+    return res.redirect(`${process.env.FRONTEND_URL}/login?register=success`); // Update with your actual frontend URL
 }
 
 /**
