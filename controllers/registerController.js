@@ -1,8 +1,9 @@
 const User = require('../models/user.model');
+const InvitedCoAuthor = require('../models/invited_co_author.model');
 const FileModel = require('../models/file.model');
 const crypto = require('crypto');
 const bcrypt = require('bcrypt');
-const transporter = require('../utils/nodemailer');
+const {sendEmail} = require('../utils/mailer');
 const fs = require('fs');
 const path = require('path');
 const sharp = require('sharp');
@@ -55,7 +56,6 @@ const handleNewUser = async (req, res) => {
         await fs.promises.mkdir(imageDir, {recursive: true});
 
         let filename;
-
         // Traitement de l'image de profil
         if (body.profilePicture && body.profilePicture.startsWith('data:image/')) {
             // Extraction des données base64
@@ -91,45 +91,45 @@ const handleNewUser = async (req, res) => {
         } else {
             // Validation de l'image de profil par défaut
             const defaultImages = [
-                `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Default.webp`,
-                `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Agrippa.webp`,
-                `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Archeologue.webp`,
-                `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Barbe_noire.webp`,
-                `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Cleopatre-1.webp`,
-                `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Cleopatre-2.webp`,
-                `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Clovis.webp`,
-                `${process.env.FRONTEND_URL}/assets/img/profile_pictures/De_Vinci.webp`,
-                `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Delphes.webp`,
-                `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Francois_Ier.webp`,
-                `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Gengis_Khan.webp`,
-                `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Germanicus.webp`,
-                `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Hadrien.webp`,
-                `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Hannibal.webp`,
-                `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Heracles.webp`,
-                `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Jeanne_d-Arc.webp`,
-                `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Jules_Cesar-1.webp`,
-                `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Jules_Cesar-2.webp`,
-                `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Justinien.webp`,
-                `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Leonidas.webp`,
-                `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Louis_IX.webp`,
-                `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Marc_Antoine.webp`,
-                `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Marie_Curie.webp`,
-                `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Napoleonien.webp`,
-                `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Newton.webp`,
-                `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Agrippa.webp`,
-                `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Pericles.webp`,
-                `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Platon.webp`,
-                `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Scipion.webp`,
-                `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Socrate.webp`,
-                `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Van_Gogh.webp`,
-                `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Vercingetorix.webp`,
+                `assets/img/profile_pictures/Default.webp`,
+                `assets/img/profile_pictures/Agrippa.webp`,
+                `assets/img/profile_pictures/Archeologue.webp`,
+                `assets/img/profile_pictures/Barbe_noire.webp`,
+                `assets/img/profile_pictures/Cleopatre-1.webp`,
+                `assets/img/profile_pictures/Cleopatre-2.webp`,
+                `assets/img/profile_pictures/Clovis.webp`,
+                `assets/img/profile_pictures/De_Vinci.webp`,
+                `assets/img/profile_pictures/Delphes.webp`,
+                `assets/img/profile_pictures/Francois_Ier.webp`,
+                `assets/img/profile_pictures/Gengis_Khan.webp`,
+                `assets/img/profile_pictures/Germanicus.webp`,
+                `assets/img/profile_pictures/Hadrien.webp`,
+                `assets/img/profile_pictures/Hannibal.webp`,
+                `assets/img/profile_pictures/Heracles.webp`,
+                `assets/img/profile_pictures/Jeanne_d-Arc.webp`,
+                `assets/img/profile_pictures/Jules_Cesar-1.webp`,
+                `assets/img/profile_pictures/Jules_Cesar-2.webp`,
+                `assets/img/profile_pictures/Justinien.webp`,
+                `assets/img/profile_pictures/Leonidas.webp`,
+                `assets/img/profile_pictures/Louis_IX.webp`,
+                `assets/img/profile_pictures/Marc_Antoine.webp`,
+                `assets/img/profile_pictures/Marie_Curie.webp`,
+                `assets/img/profile_pictures/Napoleonien.webp`,
+                `assets/img/profile_pictures/Newton.webp`,
+                `assets/img/profile_pictures/Agrippa.webp`,
+                `assets/img/profile_pictures/Pericles.webp`,
+                `assets/img/profile_pictures/Platon.webp`,
+                `assets/img/profile_pictures/Scipion.webp`,
+                `assets/img/profile_pictures/Socrate.webp`,
+                `assets/img/profile_pictures/Van_Gogh.webp`,
+                `assets/img/profile_pictures/Vercingetorix.webp`,
                 // Ajoutez les autres images par défaut autorisées ici
             ];
             if (!defaultImages.includes(body.profilePicture)) {
                 return res.status(400).send({message: "Image de profil non valide."});
             }
             // Mise à jour du chemin de l'image de profil si nécessaire
-            body.profilePicture = body.profilePicture;
+            body.profilePicture = `${process.env.FRONTEND_URL}/${body.profilePicture}`;
         }
 
         // Hachage du mot de passe
@@ -157,37 +157,43 @@ const handleNewUser = async (req, res) => {
         });
 
         // Vérification des invitations en tant que co-auteur
-        const files = await FileModel.find({'invitedCoAuthors': {$in: (body.email)}});
-        if (files.length > 0) {
-            files.forEach(async file => {
-                file.invitedCoAuthors = file.invitedCoAuthors.filter(invitedCoAuthor => invitedCoAuthor !== body.email);
-                file.coOwners.push(result._id);
-                await file.save();
-            });
+        const invitedCoAuthor = await InvitedCoAuthor.findOne({email: body.email});
+        if (invitedCoAuthor) {
+            // Trouver tous les fichiers où cet InvitedCoAuthor est invité
+            const files = await FileModel.find({invitedCoAuthors: invitedCoAuthor._id});
+
+            if (files.length > 0) {
+                for (const file of files) {
+                    // Retirer l'InvitedCoAuthor de la liste
+                    file.invitedCoAuthors = file.invitedCoAuthors.filter(coAuthorId => !coAuthorId.equals(invitedCoAuthor._id));
+
+                    // Ajouter le nouvel utilisateur à la liste des co-propriétaires
+                    file.coOwners.push(newUser._id);
+
+                    await file.save();
+                }
+            }
+
+            // Supprimer l'InvitedCoAuthor de la base de données
+            await invitedCoAuthor.remove();
         }
 
-        // Envoi de l'email de vérification
-        const mailOptions = {
-            from: `${process.env.MAIL_SENDER}`,
-            to: `${body.email}`,
-            subject: 'Vérification de votre adresse email',
-            html: `<p>Bonjour ${body.firstname},</p>
-            <p>Veuillez cliquer sur le lien ci-dessous pour vérifier votre adresse email.</p>
-            <a href="${process.env.BACKEND_URL}/api/user/verify?token=${token}">Vérifier mon adresse email</a>
-            <p>Ce lien expirera dans 3 heures.</p>
-            <p>Cordialement,</p>
-            <p>L'équipe de Datark</p>`
-        };
-        await transporter.sendMail(mailOptions, function (error, info) {
-            if (error) {
-                console.log(error);
-                return res.status(400).send({message: "Une erreur est survenue lors de l'envoi du mail."});
-            } else {
-                console.log('Email envoyé: ' + info.response);
-            }
-        });
 
-        return res.status(200).send({message: "L'utilisateur a bien été créé."});
+        const htmlContent = `<p>Bonjour ${body.firstname},</p>
+        <p>Veuillez cliquer sur le lien ci-dessous pour vérifier votre adresse email.</p>
+        <a href="${process.env.BACKEND_URL}/api/user/verify?token=${token}">Vérifier mon adresse email</a>
+        <p>Ce lien expirera dans 3 heures.</p>
+        <p>Cordialement,</p>
+        <p>L'équipe de Datark</p>`
+
+        sendEmail(htmlContent, "Vérification de votre adresse email", "Vérification de votre adresse email", body.email, body.firstname, body.lastname)
+            .then(() => {
+                console.log("Email envoyé avec succès");
+                return res.status(200).send({message: "L'utilisateur a bien été créé."});
+            }).catch((error) => {
+            console.error(error);
+            return res.status(400).send({message: "Une erreur est survenue lors de l'envoi du mail."});
+        });
 
     } catch (error) {
         console.log(error);

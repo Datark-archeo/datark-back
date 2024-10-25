@@ -18,6 +18,6 @@ const InvitedCoAuthorSchema = new mongoose.Schema({
     timestamps: true,  // Ajoute les champs createdAt et updatedAt
 });
 
-const User = mongoose.model('InvitedCoAuthor', InvitedCoAuthorSchema);
+const InvitedCoAuthor = mongoose.model('InvitedCoAuthor', InvitedCoAuthorSchema);
 
-module.exports = User;
+module.exports = InvitedCoAuthor;

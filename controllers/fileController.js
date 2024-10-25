@@ -7,7 +7,7 @@ const path = require('path');
 const User = require('../models/user.model');
 const InvitedCoAuthor = require('../models/invited_co_author.model');
 const Throttle = require('throttle');
-const transporter = require('../utils/nodemailer');
+const {sendEmail} = require('../utils/mailer');
 const bcrypt = require("bcrypt");
 const axios = require('axios');
 const pdfParse = require('pdf-parse')
@@ -163,19 +163,19 @@ async function upload(req, res) {
                     newFile.invitedCoAuthors.push(coAuthor._id);
                     await newFile.save();
 
-                    // Envoi de l'email d'invitation
-                    const mailOptions = {
-                        from: '"Datark Invitation" <no-reply@datark.com>',
-                        to: invitedCoAuthor.email,
-                        subject: 'Invitation à rejoindre Datark',
-                        html: `<p>Bonjour ${invitedCoAuthor.firstname},</p>
+                    const htmlContent = `<p>Bonjour ${invitedCoAuthor.firstname},</p>
                             <p>Vous avez été invité(e) à rejoindre Datark pour collaborer sur un fichier.</p>
                             <p>Inscrivez-vous avec votre email : ${invitedCoAuthor.email}, afin de créer votre profil.</p>
                             <a href="${process.env.FRONTEND_URL}/signup">S'inscrire</a>
                             <p>Cordialement,</p>
                             <p>L'équipe Datark</p>`
-                    };
-                    await transporter.sendMail(mailOptions);
+
+                    sendEmail(htmlContent, "Invitation à rejoindre Datark", "Invitation à rejoindre Datark", invitedCoAuthor.email, invitedCoAuthor.firstname, invitedCoAuthor.lastname)
+                        .then(() => {
+                            console.log("Email envoyé avec succès");
+                        }).catch((error) => {
+                        console.error(error);
+                    });
                 }
             }
         }

@@ -1,7 +1,6 @@
 const User = require("../models/user.model");
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
-const transporter = require('../utils/nodemailer');
 const Conversation = require("../models/conversation.model");
 const FileModel = require("../models/file.model");
 const sharp = require('sharp');
@@ -10,6 +9,9 @@ require("../models/message.model");
 require('jsonwebtoken');
 const fs = require('fs');
 const path = require('path');
+const {EmailParams, Recipient, Sender, MailerSend} = require("mailersend");
+const {sendEmail} = require('../utils/mailer');
+
 
 /**
  * @swagger
@@ -212,38 +214,38 @@ async function edit(req, res) {
             } else {
                 // Traitement des images de profil par défaut
                 const defaultImages = [
-                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Default.webp`,
-                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Agrippa.webp`,
-                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Archeologue.webp`,
-                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Barbe_noire.webp`,
-                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Cleopatre-1.webp`,
-                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Cleopatre-2.webp`,
-                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Clovis.webp`,
-                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/De_Vinci.webp`,
-                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Delphes.webp`,
-                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Francois_Ier.webp`,
-                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Gengis_Khan.webp`,
-                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Germanicus.webp`,
-                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Hadrien.webp`,
-                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Hannibal.webp`,
-                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Heracles.webp`,
-                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Jeanne_d-Arc.webp`,
-                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Jules_Cesar-1.webp`,
-                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Jules_Cesar-2.webp`,
-                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Justinien.webp`,
-                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Leonidas.webp`,
-                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Louis_IX.webp`,
-                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Marc_Antoine.webp`,
-                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Marie_Curie.webp`,
-                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Napoleonien.webp`,
-                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Newton.webp`,
-                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Agrippa.webp`,
-                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Pericles.webp`,
-                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Platon.webp`,
-                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Scipion.webp`,
-                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Socrate.webp`,
-                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Van_Gogh.webp`,
-                    `${process.env.FRONTEND_URL}/assets/img/profile_pictures/Vercingetorix.webp`,
+                    `assets/img/profile_pictures/Default.webp`,
+                    `assets/img/profile_pictures/Agrippa.webp`,
+                    `assets/img/profile_pictures/Archeologue.webp`,
+                    `assets/img/profile_pictures/Barbe_noire.webp`,
+                    `assets/img/profile_pictures/Cleopatre-1.webp`,
+                    `assets/img/profile_pictures/Cleopatre-2.webp`,
+                    `assets/img/profile_pictures/Clovis.webp`,
+                    `assets/img/profile_pictures/De_Vinci.webp`,
+                    `assets/img/profile_pictures/Delphes.webp`,
+                    `assets/img/profile_pictures/Francois_Ier.webp`,
+                    `assets/img/profile_pictures/Gengis_Khan.webp`,
+                    `assets/img/profile_pictures/Germanicus.webp`,
+                    `assets/img/profile_pictures/Hadrien.webp`,
+                    `assets/img/profile_pictures/Hannibal.webp`,
+                    `assets/img/profile_pictures/Heracles.webp`,
+                    `assets/img/profile_pictures/Jeanne_d-Arc.webp`,
+                    `assets/img/profile_pictures/Jules_Cesar-1.webp`,
+                    `assets/img/profile_pictures/Jules_Cesar-2.webp`,
+                    `assets/img/profile_pictures/Justinien.webp`,
+                    `assets/img/profile_pictures/Leonidas.webp`,
+                    `assets/img/profile_pictures/Louis_IX.webp`,
+                    `assets/img/profile_pictures/Marc_Antoine.webp`,
+                    `assets/img/profile_pictures/Marie_Curie.webp`,
+                    `assets/img/profile_pictures/Napoleonien.webp`,
+                    `assets/img/profile_pictures/Newton.webp`,
+                    `assets/img/profile_pictures/Agrippa.webp`,
+                    `assets/img/profile_pictures/Pericles.webp`,
+                    `assets/img/profile_pictures/Platon.webp`,
+                    `assets/img/profile_pictures/Scipion.webp`,
+                    `assets/img/profile_pictures/Socrate.webp`,
+                    `assets/img/profile_pictures/Van_Gogh.webp`,
+                    `assets/img/profile_pictures/Vercingetorix.webp`,
                     // Ajoutez les autres images par défaut autorisées ici
                 ];
                 if (!defaultImages.includes(body.profilePicture)) {
@@ -473,7 +475,7 @@ async function emailVerification(req, res) {
     await foundedUser.save();  // Ensure you wait for the save operation to complete
 
     // Redirect to frontend URL
-    return res.redirect(`${process.env.FRONTEND_URL}/login?register=success`); // Update with your actual frontend URL
+    return res.redirect(`login?register=success`); // Update with your actual frontend URL
 }
 
 /**
@@ -511,24 +513,27 @@ function resetPassword(req, res) {
             expire_token.setHours(expire_token.getHours() + 3);  // Le token expire dans 1 heure
             user.verification_token = token;
             user.expire_token = expire_token;
-            user.save();
-            const mailOptions = {
-                from: `${process.env.MAIL_SENDER}`,
-                to: `${user.email}`,
-                subject: 'Réinitialisation de votre mot de passe',
-                html: `<p>Bonjour ${user.firstname},</p>
-            Veuillez cliquer sur le lien ci-dessous pour réinitialiser votre mot de passe.</p>
-            <a href="${process.env.FRONTEND_URL}/reset-password?token=${token}">Réinitialiser mon mot de passe</a>
-            <p>Ce lien expirera dans 3 heures.</p>
-            <p>Cordialement,</p>
-            <p>L'équipe de Datark</p>`
-            };
-            transporter.sendMail(mailOptions, function (error, info) {
-                if (error) {
-                    return res.status(400).send({message: "Une erreur est survenue lors de l'envoi du mail."});
-                } else {
-                    return res.status(200).send({message: "Un mail de réinitialisation de mot de passe a été envoyé."});
-                }
+            user.save().then(() => {
+
+                const htmlContent = `<p>Bonjour ${user.firstname},</p>
+                Veuillez cliquer sur le lien ci-dessous pour réinitialiser votre mot de passe.</p>
+                <a href="reset-password?token=${token}">Réinitialiser mon mot de passe</a>
+                <p>Ce lien expirera dans 3 heures.</p>
+                <p>Cordialement,</p>
+                <p>L'équipe de Datark</p>`;
+
+                sendEmail(htmlContent, "Réinitialisation de votre mot de passe", "Réinitialisation de votre mot de passe", user.email, user.firstname, user.lastname)
+                    .then(response => {
+                        console.log("Email sent successfully:", response);
+                        return res.status(200).send({message: "Un email de réinitialisation a été envoyé."});
+                    })
+                    .catch(error => {
+                        console.error("Error sending email:", error);
+                        return res.status(400).send({message: "Une erreur est survenue lors de l'envoi du mail."});
+                    })
+
+            }).catch(() => {
+                return res.status(400).send({message: "Une erreur est survenue."});
             });
         });
     } catch (error) {
@@ -622,25 +627,22 @@ async function resendEmailVerification(req, res) {
         verification_token: token,
         expire_token: expire_token
     });
-    const mailOptions = {
-        from: `${process.env.MAIL_SENDER}`,
-        to: `${user.email}`,
-        subject: 'Vérification de votre adresse email',
-        html: `<p>Bonjour ${user.firstname},</p>
+    const htmlContent = `<p>Bonjour ${user.firstname},</p>
         <p>Veuillez cliquer sur le lien ci-dessous pour vérifier votre adresse email.</p>
         <a href="${process.env.BACKEND_URL}/api/user/verify?token=${token}">Vérifier mon adresse email</a>
         <p>Ce lien expirera dans 3 heures.</p>
         <p>Cordialement,</p>
         <p>L'équipe de Datark</p>`
-    };
-    await transporter.sendMail(mailOptions, function (error, info) {
-        if (error) {
-            console.error(error);
+    sendEmail(htmlContent, "Vérification de votre adresse email", "Vérification de votre adresse email", user.email, user.firstname, user.lastname)
+        .then(response => {
+            console.log("Email sent successfully:", response);
+            return res.status(200).send({message: "Un email de vérification a été envoyé."});
+        })
+        .catch(error => {
+            console.error("Error sending email:", error);
             return res.status(400).send({message: "Une erreur est survenue lors de l'envoi du mail."});
-        } else {
-            return res.status(200).send({message: "Un nouveau mail de vérification a été envoyé."});
-        }
-    });
+        })
+
 
     return res.status(400).send({message: "Une erreur est survenue lors de l'envoi du mail."});
 }
