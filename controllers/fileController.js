@@ -145,6 +145,21 @@ async function upload(req, res) {
                     newFile.coOwners.push(coOwner._id);
                     coOwner.files.push(newFile._id);
                     await coOwner.save();
+
+                    const htmlContent = `<p>Bonjour ${coOwner.firstname},</p>
+                            <p>Nous avons plaisir de vous informer que vous avez été ajouté(e) en tant que co-auteur de notre publication intitulée « ${file.name} » sur la plateforme DatArk.</p>
+                            <p>Votre contribution précieuse a permis de renforcer la qualité de ce travail, et votre nom figure désormais officiellement parmi les co-auteurs. Vous pouvez accéder à la publication directement sur DatArk en vous connectant à votre compte.</p>
+                            <a>Merci encore pour votre implication et votre expertise dans ce projet.</a>
+                            <p>N'hésitez pas à revenir vers nous pour toute question complémentaire.</p>
+                            <p>Bien cordialement,</p>
+                            <p>L'équipe de Datark</p>`
+
+                    sendEmail(htmlContent, "Ajout en tant que co-auteur sur DatArk", "Ajout en tant que co-auteur sur DatArk", invitedCoAuthor.email, invitedCoAuthor.firstname, invitedCoAuthor.lastname)
+                        .then(() => {
+                            console.log("Email envoyé avec succès");
+                        }).catch((error) => {
+                        console.error(error);
+                    });
                 }
             }
             await newFile.save();
@@ -168,7 +183,7 @@ async function upload(req, res) {
                             <p>Inscrivez-vous avec votre email : ${invitedCoAuthor.email}, afin de créer votre profil.</p>
                             <a href="${process.env.FRONTEND_URL}/signup">S'inscrire</a>
                             <p>Cordialement,</p>
-                            <p>L'équipe Datark</p>`
+                            <p>L'équipe de Datark</p>`
 
                     sendEmail(htmlContent, "Invitation à rejoindre Datark", "Invitation à rejoindre Datark", invitedCoAuthor.email, invitedCoAuthor.firstname, invitedCoAuthor.lastname)
                         .then(() => {
