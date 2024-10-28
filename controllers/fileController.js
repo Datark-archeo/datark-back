@@ -56,7 +56,6 @@ const pdfParse = require('pdf-parse')
  *         email:
  *           type: string
  */
-
 async function upload(req, res) {
     let {name, description, date_creation, pactolsLieux, pactolsSujets, coOwnersIds, invitedCoAuthors} = req.body;
 
@@ -293,7 +292,17 @@ async function getById(req, res) {
 }
 
 async function edit(req, res) {
-    let {name, description, date_creation, isNewVersion, wantRewrite, pactolsLieux, pactolsSujets} = req.body
+    let {
+        name,
+        description,
+        date_creation,
+        isNewVersion,
+        wantRewrite,
+        pactolsLieux,
+        pactolsSujets,
+        invitedCoAuthors,
+        coOwnersIds
+    } = req.body
     let fileId = req.params.id;
     let username = req.username;
 
@@ -340,6 +349,82 @@ async function edit(req, res) {
         pactolsSujets = JSON.parse(pactolsSujets);
         const sujets = pactolsSujets.map(sujet => sujet.identifier);
         file.pactolsSujets = sujets;
+    }
+
+    if (invitedCoAuthors) {
+        let fileInvitedCoAuthors = file.invitedCoAuthors;
+        invitedCoAuthors = JSON.parse(invitedCoAuthors);
+        for (const fileInvitedCoAuthor of fileInvitedCoAuthors) {
+            let coAuthor = InvitedCoAuthor.findById(fileInvitedCoAuthor);
+            if (coAuthor) {
+                for (const invitedCoAuthor of invitedCoAuthors) {
+                    if (invitedCoAuthor.email === coAuthor.email || invitedCoAuthor.lastname === coAuthor.lastname || invitedCoAuthor.firstname === coAuthor.firstname) {
+                        coAuthor.firstname = invitedCoAuthor.firstname;
+                        coAuthor.lastname = invitedCoAuthor.lastname;
+
+                        const htmlContent = `<p>Bonjour ${coAuthor.firstname},</p>
+                            <p>Vous avez été invité(e) à rejoindre Datark pour collaborer sur un fichier.</p>
+                            <p>Inscrivez-vous avec votre email : ${coAuthor.email}, afin de créer votre profil.</p>
+                            <a href="${process.env.FRONTEND_URL}/signup">S'inscrire</a>
+                            <p>Cordialement,</p>
+                            <p>L'équipe de Datark</p>`
+
+                        sendEmail(htmlContent, "Invitation à rejoindre Datark", "Invitation à rejoindre Datark", invitedCoAuthor.email, invitedCoAuthor.firstname, invitedCoAuthor.lastname)
+                            .then(() => {
+                                console.log("Email envoyé avec succès");
+                            }).catch((error) => {
+                            console.error(error);
+                        });
+                    }
+                }
+            }
+
+        }
+
+
+    }
+
+    // Récupérer la liste de coOwnersIds et la liste des coOwnersIds du file, puis comparer les deux listes, supprimer ceux qui ne sont plus et envoyer un mail au nouveau coOwner
+    if (coOwnersIds) {
+        let fileCoOwners = file.coOwners;
+        coOwnersIds = JSON.parse(coOwnersIds);
+        // supprimer les coOwners qui ne sont plus
+        for (const fileCoOwner of fileCoOwners) {
+            let coOwner = User.findById(fileCoOwner);
+            if (coOwner) {
+                if (!coOwnersIds.includes(coOwner._id)) {
+                    coOwner.files = coOwner.files.filter(id => id !== file._id);
+                    file.coOwners = file.coOwners.filter(id => id !== coOwner._id);
+                    coOwnersIds = coOwnersIds.filter(id => id !== coOwnerId); // remove the coOwner from the list
+                }
+                await coOwner.save();
+            }
+        }
+        // ajouter les nouveaux coOwners
+        for (const coOwnerId of coOwnersIds) {
+            let coOwner = User.findById(coOwnerId);
+            if (coOwner) {
+                coOwner.files.push(file._id);
+                file.coOwners.push(coOwner._id);
+                await coOwner.save();
+                const htmlContent = `<p>Bonjour ${coOwner.firstname},</p>
+                            <p>Nous avons plaisir de vous informer que vous avez été ajouté(e) en tant que co-auteur de notre publication intitulée « ${file.name} » sur la plateforme DatArk.</p>
+                            <p>Votre contribution précieuse a permis de renforcer la qualité de ce travail, et votre nom figure désormais officiellement parmi les co-auteurs. Vous pouvez accéder à la publication directement sur DatArk en vous connectant à votre compte.</p>
+                            <a>Merci encore pour votre implication et votre expertise dans ce projet.</a>
+                            <p>N'hésitez pas à revenir vers nous pour toute question complémentaire.</p>
+                            <p>Bien cordialement,</p>
+                            <p>L'équipe de Datark</p>`
+
+                sendEmail(htmlContent, "Ajout en tant que co-auteur sur DatArk", "Ajout en tant que co-auteur sur DatArk", invitedCoAuthor.email, invitedCoAuthor.firstname, invitedCoAuthor.lastname)
+                    .then(() => {
+                        console.log("Email envoyé avec succès");
+                    }).catch((error) => {
+                    console.error(error);
+                });
+            }
+        }
+
+
     }
 
     if (isNewVersion) {
@@ -794,6 +879,42 @@ function sanitizeUsername(username) {
     return username.replace(/[^a-zA-Z0-9_-]/g, '');
 }
 
+function resendMail(req, res) {
+    const {fileId} = req.body.fileId;
+    if (!fileId) {
+        return res.status(400).send({message: "Veuillez fournir un identifiant de fichier."});
+    }
+    FileModel.findById(fileId).exec().then((file) => {
+        if (!file) {
+            return res.status(404).send({message: "Fichier non trouvé."});
+        }
+        const invitedCoAuthors = file.invitedCoAuthors;
+        for (const invitedCoAuthor of invitedCoAuthors) {
+            let coAuthor = InvitedCoAuthor.findById(invitedCoAuthor);
+            if (coAuthor) {
+                const htmlContent = `<p>Bonjour ${invitedCoAuthor.firstname},</p>
+                            <p>Vous avez été invité(e) à rejoindre Datark pour collaborer sur un fichier.</p>
+                            <p>Inscrivez-vous avec votre email : ${invitedCoAuthor.email}, afin de créer votre profil.</p>
+                            <a href="${process.env.FRONTEND_URL}/signup">S'inscrire</a>
+                            <p>Cordialement,</p>
+                            <p>L'équipe de Datark</p>`
+
+                sendEmail(htmlContent, "Invitation à rejoindre Datark", "Invitation à rejoindre Datark", invitedCoAuthor.email, invitedCoAuthor.firstname, invitedCoAuthor.lastname)
+                    .then(() => {
+                        console.log("Email envoyé avec succès");
+                    }).catch((error) => {
+                    console.error(error);
+                });
+            }
+        }
+        return res.status(200).send({message: "Emails envoyés avec succès."});
+    }).catch((error) => {
+        console.error(error);
+        return res.status(500).send({message: "Erreur lors de la recherche du fichier."});
+    });
+
+}
+
 
 module.exports = {
     upload,
@@ -804,5 +925,6 @@ module.exports = {
     searchComplexFiles,
     download,
     deleteFile,
-    getUsersWithFiles
+    getUsersWithFiles,
+    resendMail
 };

@@ -88,12 +88,28 @@ async function getInfo(req, res) {
             {username: username},
             {email: username}
         ]
-    }).populate('downloadedFiles').populate('files');
+    }).populate({
+        path: 'files',
+        populate: [
+            {
+                path: 'coOwners',
+                model: 'User',
+                select: 'firstname lastname email username' // Sélectionnez les champs dont vous avez besoin
+            },
+            {
+                path: 'invitedCoAuthors',
+                model: 'InvitedCoAuthor',
+                select: 'firstname lastname email' // Sélectionnez les champs dont vous avez besoin
+            }
+        ]
+    });
+
     if (!foundedUser) {
         return res.status(400).json({"message": `Utilisateur non trouvé`});
     }
     return res.status(200).json({user: foundedUser});
 }
+
 
 /**
  * @swagger

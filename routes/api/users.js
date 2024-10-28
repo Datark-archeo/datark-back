@@ -92,13 +92,6 @@ router.route('/banner')
 
 /**
  * @swagger
- * tags:
- *   name: Utilisateurs
- *   description: Gestion des utilisateurs
- */
-
-/**
- * @swagger
  * /users/change-password:
  *   post:
  *     summary: Change le mot de passe de l'utilisateur authentifié

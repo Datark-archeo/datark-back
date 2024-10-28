@@ -92,7 +92,7 @@ router.route('/user')
 router.route('/upload')
     .post([
         verifyJWT,
-        fileUpload({ createParentPath: true }),
+        fileUpload({createParentPath: true}),
         filesPayloadExists,
         fileExtLimiter(['.pdf']),
         fileSizeLimiter
@@ -147,7 +147,7 @@ router.route('/upload')
 router.route('/edit/:id')
     .put([
         verifyJWT,
-        fileUpload({ createParentPath: true }),
+        fileUpload({createParentPath: true}),
         fileExtLimiter(['.pdf']),
         fileSizeLimiter
     ], fileController.edit)
@@ -300,5 +300,8 @@ router.route('/download/:id')
 router.route('/:id')
     .get(fileController.getById)
     .delete(verifyJWT, fileController.deleteFile)
+
+router.route('/resend-email')
+    .post(fileController.resendMail)
 
 module.exports = router;

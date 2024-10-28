@@ -43,16 +43,18 @@ if (!process.env.ACCESS_TOKEN_SECRET) {
     throw new Error('REFRESH_TOKEN_SECRET is not defined');
 } else if (!process.env.MONGODB_URI) {
     throw new Error('MONGODB_URI is not defined');
-} else if (!process.env.GOOGLE_CLIENT_ID) {
-    throw new Error('GOOGLE_CLIENT_ID is not defined');
-} else if (!process.env.GOOGLE_CLIENT_SECRET) {
-    throw new Error('GOOGLE_CLIENT_SECRET is not defined');
-} else if (!process.env.GOOGLE_REFRESH_TOKEN) {
-    throw new Error('GOOGLE_REFRESH_TOKEN is not defined');
-} else if (!process.env.GOOGLE_EMAIL) {
-    throw new Error('GOOGLE_EMAIL is not defined');
 } else if (!process.env.FRONTEND_URL) {
     throw new Error('FRONTEND_URL is not defined');
+} else if (!process.env.BACKEND_URL) {
+    throw new Error('BACKEND_URL is not defined');
+} else if (!process.env.COPYLEAKS_API_KEY) {
+    throw new Error('COPYLEAKS_API_KEY is not defined');
+} else if (!process.env.COPYLEAKS_EMAIL) {
+    throw new Error('COPYLEAKS_EMAIL is not defined');
+} else if (!process.env.MAIL_SENDER) {
+    throw new Error('MAIL_SENDER is not defined');
+} else if (!process.env.MAILER_SEND_API_KEY) {
+    throw new Error('MAILER_SEND_API_KEY is not defined');
 }
 
 const swaggerOptions = {
