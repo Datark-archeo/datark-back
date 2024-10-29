@@ -840,21 +840,27 @@ async function deleteFile(req, res) {
         const filePath = path.join(__dirname, '../users/', file.owner.username, `/files/${file.file_name}`);
 
         // Remove the file from the file system
-        fs.unlink(filePath, async (err) => {
-            if (err) {
-                console.error(err);
-                return res.status(500).send({message: "Erreur lors de la suppression du fichier."});
-            }
+        try {
+            fs.unlink(filePath, async (err) => {
+                if (err) {
+                    console.error(err);
+                    return res.status(500).send({message: "Erreur lors de la suppression du fichier."});
+                }
 
-            // Remove the file document from the database
-            try {
-                await FileModel.deleteOne({_id: id});
-                return res.status(200).send({message: "Le fichier a bien été supprimé."});
-            } catch (deleteErr) {
-                console.error(deleteErr);
-                return res.status(500).send({message: "Erreur lors de la suppression de l'enregistrement du fichier."});
-            }
-        });
+                // Remove the file document from the database
+                try {
+                    await FileModel.deleteOne({_id: id});
+                    return res.status(200).send({message: "Le fichier a bien été supprimé."});
+                } catch (deleteErr) {
+                    console.error(deleteErr);
+                    return res.status(500).send({message: "Erreur lors de la suppression de l'enregistrement du fichier."});
+                }
+            });
+        } catch (err) {
+            console.error(err);
+            return res.status(500).send({message: "Le fichier n'existe pas. Merci de contacter le service technique."});
+        }
+
     } catch (err) {
         console.error(err);
         return res.status(500).send({message: "Erreur interne du serveur."});
