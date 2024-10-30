@@ -1,9 +1,9 @@
-const MB = 100; // 100 MB
+const MB = 10; // 100 MB
 const FILE_SIZE_LIMIT = MB * 1024 * 1024;
 
 const fileSizeLimiter = (req, res, next) => {
     const files = req.files
-    if(!files) return next();
+    if (!files) return next();
     const filesOverLimit = []
     // Which files are over the limit?
     Object.keys(files).forEach(key => {
@@ -11,7 +11,6 @@ const fileSizeLimiter = (req, res, next) => {
             filesOverLimit.push(files[key].name)
         }
     })
-
     if (filesOverLimit.length) {
         const properVerb = filesOverLimit.length > 1 ? 'are' : 'is';
 
@@ -21,7 +20,7 @@ const fileSizeLimiter = (req, res, next) => {
             ? sentence.replace(",", " and")
             : sentence.replace(/,(?=[^,]*$)/, " and");
 
-        return res.status(413).json({ status: "error", message });
+        return res.status(413).json({status: "error", message: message})
 
     }
 
