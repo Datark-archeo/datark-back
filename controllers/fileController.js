@@ -146,7 +146,7 @@ async function upload(req, res) {
                     await coOwner.save();
 
                     const htmlContent = `<p>Bonjour ${coOwner.firstname},</p>
-                            <p>Nous avons plaisir de vous informer que vous avez été ajouté(e) en tant que co-auteur de notre publication intitulée « ${file.name} » sur la plateforme DatArk.</p>
+                            <p>Nous avons plaisir de vous informer que vous avez été ajouté(e) en tant que co-auteur de notre publication intitulée « ${newFile.name} » sur la plateforme DatArk.</p>
                             <p>Votre contribution précieuse a permis de renforcer la qualité de ce travail, et votre nom figure désormais officiellement parmi les co-auteurs. Vous pouvez accéder à la publication directement sur DatArk en vous connectant à votre compte.</p>
                             <a>Merci encore pour votre implication et votre expertise dans ce projet.</a>
                             <p>N'hésitez pas à revenir vers nous pour toute question complémentaire.</p>
