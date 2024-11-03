@@ -537,7 +537,7 @@ function resetPassword(req, res) {
 
                 const htmlContent = `<p>Bonjour ${user.firstname},</p>
                 Veuillez cliquer sur le lien ci-dessous pour réinitialiser votre mot de passe.</p>
-                <a href="reset-password?token=${token}">Réinitialiser mon mot de passe</a>
+                <a href="${process.env.FRONTEND_URL}/reset-password?token=${token}">Réinitialiser mon mot de passe</a>
                 <p>Ce lien expirera dans 3 heures.</p>
                 <p>Cordialement,</p>
                 <p>L'équipe de Datark</p>`;
