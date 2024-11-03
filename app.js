@@ -82,6 +82,7 @@ app.use(prefix + '/file', require('./routes/api/files'));
 app.use(prefix + '/pactols', require('./routes/api/pactols'));
 app.use(prefix + '/tracker', require('./routes/api/tracker'));
 app.use(prefix + '/webhooks', require('./routes/webhooks'));
+app.use(prefix + '/contact', require('./routes/contact'));
 
 app.use(errorHandler);
 
