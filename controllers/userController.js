@@ -199,7 +199,6 @@ async function edit(req, res) {
             if (body.profilePicture.startsWith('data:image/')) {
                 // L'utilisateur a uploadé une nouvelle image
                 // Supprimer l'ancienne image de profil si ce n'est pas une image par défaut
-                await deleteCurrentProfilePicture(user);
 
                 // Traitement de l'image encodée en base64
                 const matches = body.profilePicture.match(/^data:image\/([a-zA-Z]+);base64,(.+)$/);
@@ -222,6 +221,7 @@ async function edit(req, res) {
                 const filename = `profile.${imageType}`;
 
                 const imagePath = path.join(imageDir, filename);
+                await deleteCurrentProfilePicture(user);
 
                 // Utilisation de sharp pour redimensionner et sauvegarder l'image
                 await sharp(buffer)
@@ -243,7 +243,6 @@ async function edit(req, res) {
                     }
 
                     // Suppression de l'image actuelle de profil de l'utilisateur
-                    await deleteCurrentProfilePicture(user);
 
                     // Mise à jour du chemin de l'image de profil pour pointer vers l'image par défaut
                     const baseUrl = process.env.BACKEND_URL || 'http://localhost:3000';
