@@ -58,40 +58,6 @@ const handleNewUser = async (req, res) => {
         let filename;
         // Traitement de l'image de profil
         if (body.profilePicture) {
-            const defaultImages = [
-                `assets/img/profile_pictures/Default.webp`,
-                `assets/img/profile_pictures/Agrippa.webp`,
-                `assets/img/profile_pictures/Archeologue.webp`,
-                `assets/img/profile_pictures/Barbe_noire.webp`,
-                `assets/img/profile_pictures/Cleopatre-1.webp`,
-                `assets/img/profile_pictures/Cleopatre-2.webp`,
-                `assets/img/profile_pictures/Clovis.webp`,
-                `assets/img/profile_pictures/De_Vinci.webp`,
-                `assets/img/profile_pictures/Delphes.webp`,
-                `assets/img/profile_pictures/Francois_Ier.webp`,
-                `assets/img/profile_pictures/Gengis_Khan.webp`,
-                `assets/img/profile_pictures/Germanicus.webp`,
-                `assets/img/profile_pictures/Hadrien.webp`,
-                `assets/img/profile_pictures/Hannibal.webp`,
-                `assets/img/profile_pictures/Heracles.webp`,
-                `assets/img/profile_pictures/Jeanne_d-Arc.webp`,
-                `assets/img/profile_pictures/Jules_Cesar-1.webp`,
-                `assets/img/profile_pictures/Jules_Cesar-2.webp`,
-                `assets/img/profile_pictures/Justinien.webp`,
-                `assets/img/profile_pictures/Leonidas.webp`,
-                `assets/img/profile_pictures/Louis_IX.webp`,
-                `assets/img/profile_pictures/Marc_Antoine.webp`,
-                `assets/img/profile_pictures/Marie_Curie.webp`,
-                `assets/img/profile_pictures/Napoleonien.webp`,
-                `assets/img/profile_pictures/Newton.webp`,
-                `assets/img/profile_pictures/Pericles.webp`,
-                `assets/img/profile_pictures/Platon.webp`,
-                `assets/img/profile_pictures/Scipion.webp`,
-                `assets/img/profile_pictures/Socrate.webp`,
-                `assets/img/profile_pictures/Van_Gogh.webp`,
-                `assets/img/profile_pictures/Vercingetorix.webp`,
-                // Ajoutez les autres images par défaut autorisées ici
-            ];
 
             if (body.profilePicture.startsWith('data:image/')) {
                 // L'utilisateur a uploadé une nouvelle image
@@ -127,14 +93,26 @@ const handleNewUser = async (req, res) => {
                 const baseUrl = process.env.BACKEND_URL || 'http://localhost:3000';
                 body.profilePicture = `${baseUrl}/api/user/${body.username}/profile/${filename}`;
             } else {
-                // L'utilisateur a choisi une image par défaut
-                if (!defaultImages.includes(body.profilePicture)) {
-                    return res.status(400).send({message: "Image de profil non valide."});
-                }
+                try {
+                    // Chemin vers le dossier des images par défaut
+                    const defaultImagesDir = path.join(__dirname, '..', 'assets', 'profile_pictures'); // Assurez-vous que le chemin est correct
+                    const defaultImages = fs.readdirSync(defaultImagesDir);
 
-                // Mise à jour du chemin de l'image de profil pour pointer directement vers l'image par défaut
-                const baseUrl = process.env.BACKEND_URL || 'http://localhost:3000';
-                body.profilePicture = `${baseUrl}/${body.profilePicture}`;
+                    if (defaultImages.includes(body.profilePicture)) {
+                        return res.status(400).send({message: "Vous ne pouvez pas utiliser cette image."});
+                    }
+
+                    // Suppression de l'image actuelle de profil de l'utilisateur
+                    await deleteCurrentProfilePicture(user);
+
+                    // Mise à jour du chemin de l'image de profil pour pointer vers l'image par défaut
+                    const baseUrl = process.env.BACKEND_URL || 'http://localhost:3000';
+                    body.profilePicture = `${baseUrl}/${body.profilePicture}`;
+
+                } catch (error) {
+                    console.error("Erreur lors du traitement de l'image de profil par défaut :", error);
+                    return res.status(500).send({message: "Erreur interne du serveur."});
+                }
             }
         }
 
