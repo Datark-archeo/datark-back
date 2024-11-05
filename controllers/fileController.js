@@ -153,7 +153,7 @@ async function upload(req, res) {
                             <p>Bien cordialement,</p>
                             <p>L'équipe de Datark</p>`
 
-                    sendEmail(htmlContent, "Ajout en tant que co-auteur sur DatArk", "Ajout en tant que co-auteur sur DatArk", invitedCoAuthor.email, invitedCoAuthor.firstname, invitedCoAuthor.lastname)
+                    sendEmail(htmlContent, "Ajout en tant que co-auteur sur DatArk", "Ajout en tant que co-auteur sur DatArk", coOwner.email, coOwner.firstname, coOwner.lastname)
                         .then(() => {
                             console.log("Email envoyé avec succès");
                         }).catch((error) => {
