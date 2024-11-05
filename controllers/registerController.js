@@ -7,13 +7,34 @@ const {sendEmail} = require('../utils/mailer');
 const fs = require('fs');
 const path = require('path');
 const sharp = require('sharp');
+const {post} = require("axios");
 
 const handleNewUser = async (req, res) => {
     const body = req.body.user;
+    if (!body.recaptchaToken) {
+        return res.status(400).send({message: 'Le jeton reCAPTCHA est manquant.'});
+    }
 
     // Vérification des champs requis
     if (!body.firstname || !body.lastname || !body.username || !body.email || !body.password || !body.confirmPassword || !body.country || !body.city || !body.birthday) {
         return res.status(400).send({message: "Veuillez remplir tous les champs."});
+    }
+
+
+    try {
+        const recaptchaResponse = await post(`https://www.google.com/recaptcha/api/siteverify`, null, {
+            params: {
+                secret: process.env.RECAPTCHA_SECRET_KEY,  // Assurez-vous que cette clé est définie dans votre fichier .env
+                response: body.recaptchaToken
+            }
+        });
+
+        if (!recaptchaResponse.data.success || recaptchaResponse.data.score < 0.5) {
+            return res.status(400).json({message: 'La vérification reCAPTCHA a échoué. Veuillez réessayer.'});
+        }
+    } catch (error) {
+        console.error('Erreur lors de la vérification reCAPTCHA:', error);
+        return res.status(500).json({message: 'Erreur lors de la vérification reCAPTCHA.'});
     }
 
     // Vérification de l'unicité du nom d'utilisateur

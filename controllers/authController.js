@@ -2,6 +2,7 @@ const User = require('../models/user.model');
 const bcrypt = require('bcrypt');
 
 const jwt = require('jsonwebtoken');
+const {post} = require("axios");
 require('dotenv').config();
 /**
  * @swagger
@@ -60,28 +61,46 @@ require('dotenv').config();
  */
 const handleLogin = async (req, res) => {
     const cookies = req.cookies;
-    const { user } = req.body;
+    const {user} = req.body;
     const username = user.username;
     const password = user.password;
-    if (!username  || !password) return res.status(400).json({ 'message': 'Please fill all inputs.' });
+    const recaptchaToken = user.recaptchaToken;
+    if (!username || !password || !recaptchaToken) return res.status(400).json({message: 'Please fill all inputs and complete reCAPTCHA.'});
+
+    // Vérification reCAPTCHA
+    try {
+        const recaptchaResponse = await post(`https://www.google.com/recaptcha/api/siteverify`, null, {
+            params: {
+                secret: process.env.RECAPTCHA_SECRET_KEY,  // Assurez-vous que votre clé secrète est définie dans .env
+                response: recaptchaToken
+            }
+        });
+        console.log('reCAPTCHA response:', recaptchaResponse.data);
+        if (!recaptchaResponse.data.success || recaptchaResponse.data.score < 0.5) {
+            return res.status(400).json({message: 'reCAPTCHA verification failed. Please try again.'});
+        }
+    } catch (error) {
+        console.error('Erreur lors de la vérification reCAPTCHA:', error);
+        return res.status(500).json({message: 'Erreur lors de la vérification reCAPTCHA.'});
+    }
 
     let foundUser = await User.findOne({
         $or: [
-            { username: username },
-            { email: username }
+            {username: username},
+            {email: username}
         ]
     }).exec();
 
     if (!foundUser) {
-        return res.status(400).json({ message: "Mot de passe ou le nom d'utilisateur incorrect" });
+        return res.status(400).json({message: "Mot de passe ou le nom d'utilisateur incorrect"});
     }
 
 
     // evaluate password
-    const match = bcrypt.compare(password, foundUser.password).then( async (result) => {
+    const match = bcrypt.compare(password, foundUser.password).then(async (result) => {
         if (result) {
-            if(!foundUser.email_verified){
-                return res.status(400).send({message : "Please verify your email."});
+            if (!foundUser.email_verified) {
+                return res.status(400).send({message: "Please verify your email."});
             }
             const roles = Object.values(foundUser.roles).filter(Boolean);
 
@@ -92,12 +111,13 @@ const handleLogin = async (req, res) => {
                     }
                 },
                 process.env.ACCESS_TOKEN_SECRET,
-                { expiresIn: '10s'}
+                {expiresIn: '10s'}
             );
             const newRefreshToken = jwt.sign({
-                    "username": foundUser.username },
+                    "username": foundUser.username
+                },
                 process.env.REFRESH_TOKEN_SECRET,
-                { expiresIn: '1d'}
+                {expiresIn: '1d'}
             );
 
             // Changed to let keyword
@@ -113,7 +133,7 @@ const handleLogin = async (req, res) => {
                     3) If 1 & 2, reuse detection is needed to clear all RTs when user logs in
                 */
                 const refreshToken = cookies.jwt;
-                const foundToken = await User.findOne({ refreshToken }).exec();
+                const foundToken = await User.findOne({refreshToken}).exec();
 
                 // Detected refresh token reuse!
                 if (!foundToken) {
@@ -122,16 +142,16 @@ const handleLogin = async (req, res) => {
                     newRefreshTokenArray = [];
                 }
 
-                res.clearCookie('jwt', { httpOnly: true, secure: true });
+                res.clearCookie('jwt', {httpOnly: true, secure: true});
             }
             // Saving refreshToken with current user
             foundUser.refreshToken = [...newRefreshTokenArray, newRefreshToken];
             const result = await foundUser.save();
-            res.cookie('jwt', newRefreshToken, { httpOnly: true, secure: true, maxAge: 24 * 60 * 60 * 1000 });
-            if(user.username === "default") {
-                return res.status(200).json({ accessToken, message: "NO_USERNAME"  });
+            res.cookie('jwt', newRefreshToken, {httpOnly: true, secure: true, maxAge: 24 * 60 * 60 * 1000});
+            if (user.username === "default") {
+                return res.status(200).json({accessToken, message: "NO_USERNAME"});
             } else {
-                return res.status(200).json({ accessToken, username: user.username});
+                return res.status(200).json({accessToken, username: user.username});
             }
         } else {
             return res.status(401).json({message: 'Mot de passe ou le nom d\'utilisateur incorrect'});
@@ -143,4 +163,4 @@ const handleLogin = async (req, res) => {
 
 }
 
-module.exports = { handleLogin };
+module.exports = {handleLogin};
