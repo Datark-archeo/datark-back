@@ -235,7 +235,7 @@ async function edit(req, res) {
                 // Traitement des images de profil par défaut
                 try {
                     // Chemin vers le dossier des images par défaut
-                    const defaultImagesDir = path.join(__dirname, '..', 'assets', 'profile_pictures'); // Assurez-vous que le chemin est correct
+                    const defaultImagesDir = path.join(__dirname, '..', 'assets', 'img', 'profile_pictures'); // Assurez-vous que le chemin est correct
                     const defaultImages = fs.readdirSync(defaultImagesDir);
 
                     if (defaultImages.includes(body.profilePicture)) {
