@@ -123,9 +123,6 @@ const handleNewUser = async (req, res) => {
                         return res.status(400).send({message: "Vous ne pouvez pas utiliser cette image."});
                     }
 
-                    // Suppression de l'image actuelle de profil de l'utilisateur
-                    await deleteCurrentProfilePicture(user);
-
                     // Mise à jour du chemin de l'image de profil pour pointer vers l'image par défaut
                     const baseUrl = process.env.BACKEND_URL || 'http://localhost:3000';
                     body.profilePicture = `${baseUrl}/${body.profilePicture}`;
