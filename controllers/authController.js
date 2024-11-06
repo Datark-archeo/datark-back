@@ -3,6 +3,8 @@ const bcrypt = require('bcrypt');
 
 const jwt = require('jsonwebtoken');
 const {post} = require("axios");
+const crypto = require("crypto");
+const {sendEmail} = require("../utils/mailer");
 require('dotenv').config();
 /**
  * @swagger
@@ -100,8 +102,14 @@ const handleLogin = async (req, res) => {
     const match = bcrypt.compare(password, foundUser.password).then(async (result) => {
         if (result) {
             if (!foundUser.email_verified) {
-                return res.status(400).send({message: "Please verify your email."});
+                const resp = await resendEmailVerification(foundUser.username);
+                if (resp) {
+                    return res.status(400).send({message: "Your email is not verified. We send you a new verification email."});
+                } else {
+                    return res.status(400).send({message: "Your email is not verified. Check your email for verification link."});
+                }
             }
+
             const roles = Object.values(foundUser.roles).filter(Boolean);
 
             const accessToken = jwt.sign({
@@ -162,5 +170,42 @@ const handleLogin = async (req, res) => {
     });
 
 }
+
+async function resendEmailVerification(username) {
+    const user = await User.findOne({username: username}).exec();
+    if (user === null) {
+        return false;
+    }
+    // check if the token is still valid
+    if (user.expire_token > new Date()) {
+        return false;
+    }
+    const token = crypto.randomBytes(32).toString('hex');
+    const expire_token = new Date();
+    expire_token.setHours(expire_token.getHours() + 3);  // Le token expire dans 3 heures
+    await user.update({
+        verification_token: token,
+        expire_token: expire_token
+    });
+    const htmlContent = `<p>Bonjour ${user.firstname},</p>
+        <p>Veuillez cliquer sur le lien ci-dessous pour vérifier votre adresse email.</p>
+        <a href="${process.env.BACKEND_URL}/api/user/verify?token=${token}">Vérifier mon adresse email</a>
+        <p>Ce lien expirera dans 3 heures.</p>
+        <p>Cordialement,</p>
+        <p>L'équipe de Datark</p>`
+    sendEmail(htmlContent, "Vérification de votre adresse email", "Vérification de votre adresse email", user.email, user.firstname, user.lastname)
+        .then(response => {
+            console.log("Email sent successfully:", response);
+            return true;
+        })
+        .catch(error => {
+            console.error("Error sending email:", error);
+            return false;
+        })
+
+
+    return false;
+}
+
 
 module.exports = {handleLogin};

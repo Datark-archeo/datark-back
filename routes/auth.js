@@ -1,6 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const authController = require('../controllers/authController');
+const User = require("../models/user.model");
+const crypto = require("crypto");
+const {sendEmail} = require("../utils/mailer");
 /**
  * @swagger
  * tags:
@@ -52,5 +55,6 @@ const authController = require('../controllers/authController');
  *         description: Internal server error
  */
 router.post('/', authController.handleLogin);
+
 
 module.exports = router;
