@@ -399,6 +399,9 @@ async function getUserById(req, res) {
         .populate({
             path: 'contacts',
             select: 'username'
+        }).populate({
+            path: 'followers',
+            select: 'username'
         }).exec();
     if (!user) {
         return res.status(400).send({message: "Utilisateur introuvable."});
@@ -876,33 +879,31 @@ async function getContacts(req, res) {
  *       500:
  *         $ref: '#/components/responses/InternalServerError'
  */
-function follow(req, res) {
-    const {id} = req.body;
-    const username = req.username;
-    User.findOne({username: username}).exec().then(user => {
+async function follow(req, res) {
+    try {
+        const {id} = req.body;
+        const username = req.username;
+
+        const user = await User.findOne({username: username}).exec();
         if (!user) {
             return res.status(400).send({message: "Utilisateur introuvable."});
         }
-        User.findOne({_id: id}).exec().then(followedUser => {
-            if (!followedUser) {
-                return res.status(400).send({message: "Utilisateur à suivre introuvable."});
-            }
-            user.following.push(followedUser._id);
-            followedUser.followers.push(user._id);
-            user.save().then(() => {
-                followedUser.save().then(() => {
-                    return res.status(200).send({message: "Utilisateur suivi"});
-                }).catch(() => {
-                    return res.status(400).send({message: "Une erreur est survenue."});
-                });
-            }).catch(() => {
-                return res.status(400).send({message: "Une erreur est survenue."});
-            });
-            return res.status(200).send({message: "Utilisateur suivi"});
-        }).catch(() => {
-            return res.status(400).send({message: "Une erreur est survenue."});
-        });
-    });
+
+        const followedUser = await User.findOne({_id: id}).exec();
+        if (!followedUser) {
+            return res.status(400).send({message: "Utilisateur à suivre introuvable."});
+        }
+
+        user.following.push(followedUser._id);
+        followedUser.followers.push(user._id);
+
+        await user.save();
+        await followedUser.save();
+
+        return res.status(200).send({message: "Utilisateur suivi"});
+    } catch (error) {
+        return res.status(400).send({message: "Une erreur est survenue."});
+    }
 }
 
 /**
@@ -928,26 +929,31 @@ function follow(req, res) {
  *       500:
  *         $ref: '#/components/responses/InternalServerError'
  */
-function unfollow(req, res) {
-    const {id} = req.body;
-    const username = req.username;
-    User.findOne({username: username}).exec().then(user => {
+async function unfollow(req, res) {
+    try {
+        const {id} = req.body;
+        const username = req.username;
+
+        const user = await User.findOne({username: username}).exec();
         if (!user) {
             return res.status(400).send({message: "Utilisateur introuvable."});
         }
-        User.findOne({_id: id}).exec().then(followedUser => {
-            if (!followedUser) {
-                return res.status(400).send({message: "Utilisateur à suivre introuvable."});
-            }
-            user.following = user.following.filter(following => following.toString() !== followedUser._id.toString());
-            followedUser.followers = followedUser.followers.filter(follower => follower.toString() !== user._id.toString());
-            user.save();
-            followedUser.save();
-            return res.status(200).send({message: "Utilisateur non suivi"});
-        }).catch(() => {
-            return res.status(400).send({message: "Une erreur est survenue."});
-        });
-    });
+
+        const followedUser = await User.findOne({_id: id}).exec();
+        if (!followedUser) {
+            return res.status(400).send({message: "Utilisateur à suivre introuvable."});
+        }
+
+        user.following = user.following.filter(following => following.toString() !== followedUser._id.toString());
+        followedUser.followers = followedUser.followers.filter(follower => follower.toString() !== user._id.toString());
+
+        await user.save();
+        await followedUser.save();
+
+        return res.status(200).send({message: "Utilisateur non suivi"});
+    } catch (error) {
+        return res.status(400).send({message: "Une erreur est survenue."});
+    }
 }
 
 /**
@@ -1118,7 +1124,6 @@ function editProfileBanner(req, res) {
                 });
                 return res.status(400).send({message: "Utilisateur introuvable."});
             }
-            print(file);
             // Supprime l'ancienne bannière si elle existe et n'est pas une bannière par défaut
             if (user.profileBanner && !user.profileBanner.startsWith('assets/img/banner_pictures/')) {
                 const oldBannerPath = path.join(__dirname, '..', user.profileBanner);
@@ -1154,7 +1159,8 @@ function editProfileBanner(req, res) {
                 return res.status(400).send({message: "Utilisateur introuvable."});
             }
             const baseUrl = process.env.BACKEND_URL || 'http://localhost:3000';
-            user.profileBanner = `${baseUrl}/${profileBanner}`;
+            user.profileBanner = `${baseUrl}/api/${profileBanner}`;
+            console.log(user.profileBanner);
             user.save().then(() => {
                 return res.status(200).send({message: "Bannière de profil modifiée"});
             }).catch(() => {
