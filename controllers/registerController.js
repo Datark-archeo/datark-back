@@ -112,7 +112,7 @@ const handleNewUser = async (req, res) => {
 
                 // Mise à jour du chemin de l'image de profil
                 const baseUrl = process.env.BACKEND_URL || 'http://localhost:3000';
-                body.profilePicture = `${baseUrl}/api/user/${body.username}/profile/${filename}`;
+                body.profilePicture = `${baseUrl}/user/${body.username}/profile/${filename}`;
             } else {
                 try {
                     // Chemin vers le dossier des images par défaut
@@ -183,7 +183,7 @@ const handleNewUser = async (req, res) => {
 
         const htmlContent = `<p>Bonjour ${body.firstname},</p>
         <p>Veuillez cliquer sur le lien ci-dessous pour vérifier votre adresse email.</p>
-        <a href="${process.env.BACKEND_URL}/api/user/verify?token=${token}">Vérifier mon adresse email</a>
+        <a href="${process.env.BACKEND_URL}/user/verify?token=${token}">Vérifier mon adresse email</a>
         <p>Ce lien expirera dans 3 heures.</p>
         <p>Cordialement,</p>
         <p>L'équipe de Datark</p>`

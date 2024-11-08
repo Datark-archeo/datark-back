@@ -102,6 +102,9 @@ async function getInfo(req, res) {
                 select: 'firstname lastname email' // Sélectionnez les champs dont vous avez besoin
             }
         ]
+    }).populate({
+        path: 'following',
+        select: 'firstname lastname _id username profilePicture'
     });
 
     if (!foundedUser) {
