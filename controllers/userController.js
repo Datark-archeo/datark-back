@@ -1162,7 +1162,8 @@ function editProfileBanner(req, res) {
                 return res.status(400).send({message: "Utilisateur introuvable."});
             }
             const baseUrl = process.env.BACKEND_URL || 'http://localhost:3000';
-            user.profileBanner = `${baseUrl}/api/${profileBanner}`;
+
+            user.profileBanner = `${baseUrl.replace("/api", '')}/api/${profileBanner}`;
             user.save().then(() => {
                 return res.status(200).send({message: "Bannière de profil modifiée"});
             }).catch(() => {
