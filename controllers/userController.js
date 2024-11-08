@@ -1160,7 +1160,6 @@ function editProfileBanner(req, res) {
             }
             const baseUrl = process.env.BACKEND_URL || 'http://localhost:3000';
             user.profileBanner = `${baseUrl}/api/${profileBanner}`;
-            console.log(user.profileBanner);
             user.save().then(() => {
                 return res.status(200).send({message: "Bannière de profil modifiée"});
             }).catch(() => {
