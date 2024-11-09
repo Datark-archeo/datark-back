@@ -1124,7 +1124,12 @@ async function editProfileBanner(req, res) {
             const {profileBanner} = req.body.user;
             let banner = profileBanner;
             if (!profileBanner.includes('data:image/')) {
-                banner = `${process.env.BACKEND_URL}/api/${profileBanner}`;
+                let backUrl = process.env.BACKEND_URL;
+                if (backUrl.includes('api')) {
+                    banner = `${process.env.BACKEND_URL}/${profileBanner}`;
+                } else {
+                    banner = `${process.env.BACKEND_URL}/api/${profileBanner}`;
+                }
             }
             user.profileBanner = banner;
             await user.save();
