@@ -233,7 +233,7 @@ async function edit(req, res) {
 
                 // Mise à jour du chemin de l'image de profil
                 const baseUrl = process.env.BACKEND_URL || 'http://localhost:3000';
-                user.profilePicture = `${baseUrl}/api/user/${user.username}/profile/${filename}`;
+                user.profilePicture = `${baseUrl}/user/${user.username}/profile/${filename}`;
             } else {
                 // Traitement des images de profil par défaut
                 try {
@@ -1112,67 +1112,30 @@ function removeContact(req, res) {
 }
 
 
-function editProfileBanner(req, res) {
-    // Vérifie si un fichier a été téléchargé
-    if (req.file) {
-        const file = req.file;
+async function editProfileBanner(req, res) {
+    try {
         const username = req.username;
-        User.findOne({username: username}).exec().then(user => {
-            if (!user) {
-                // Supprime le fichier téléchargé si l'utilisateur n'existe pas
-                fs.unlink(file.path, (err) => {
-                    if (err) {
-                        console.error('Erreur lors de la suppression du fichier:', err);
-                    }
-                });
-                return res.status(400).send({message: "Utilisateur introuvable."});
+        const user = await User.findOne({username: username}).exec();
+        if (!user) {
+            return res.status(400).send({message: "Utilisateur introuvable."});
+        }
+
+        if (req.body.user) {
+            const {profileBanner} = req.body.user;
+            let banner = profileBanner;
+            if (!profileBanner.includes('data:image/')) {
+                banner = `${process.env.BACKEND_URL}/api/${profileBanner}`;
             }
-            // Supprime l'ancienne bannière si elle existe et n'est pas une bannière par défaut
-            if (user.profileBanner && !user.profileBanner.startsWith('assets/img/banner_pictures/')) {
-                const oldBannerPath = path.join(__dirname, '..', user.profileBanner);
-                fs.unlink(oldBannerPath, (err) => {
-                    if (err) {
-                        console.error('Erreur lors de la suppression de l\'ancienne bannière:', err);
-                    }
-                });
-            }
+            user.profileBanner = banner;
+            await user.save();
 
-            // Met à jour le profil avec le chemin de la nouvelle image
-            const baseUrl = process.env.BACKEND_URL || 'http://localhost:3000';
-            user.profileBanner = `${baseUrl}/banners/ + ${file.filename}`;
-
-            user.save().then(() => {
-                return res.status(200).send({message: "Bannière de profil modifiée", bannerUrl: user.profileBanner});
-            }).catch((err) => {
-                console.error('Erreur lors de la sauvegarde de l\'utilisateur:', err);
-                return res.status(500).send({message: "Une erreur est survenue lors de la sauvegarde."});
-            });
-
-        }).catch((err) => {
-            console.error('Erreur lors de la recherche de l\'utilisateur:', err);
-            return res.status(500).send({message: "Une erreur est survenue."});
-        });
-
-    } else if (req.body.user) {
-        const {profileBanner} = req.body.user;
-
-        const username = req.username;
-        User.findOne({username: username}).exec().then(user => {
-            if (!user) {
-                return res.status(400).send({message: "Utilisateur introuvable."});
-            }
-            const baseUrl = process.env.BACKEND_URL || 'http://localhost:3000';
-
-            user.profileBanner = `${baseUrl.replace("/api", '')}/api/${profileBanner}`;
-            user.save().then(() => {
-                return res.status(200).send({message: "Bannière de profil modifiée"});
-            }).catch(() => {
-                return res.status(400).send({message: "Une erreur est survenue."});
-            });
-
-        });
-    } else {
-        return res.status(400).send({message: "Aucun fichier ou bannière sélectionnée."});
+            return res.status(200).send({message: "Bannière de profil modifiée"});
+        } else {
+            return res.status(400).send({message: "Aucun fichier ou bannière sélectionnée."});
+        }
+    } catch (err) {
+        console.error('Erreur lors de la modification de la bannière de profil:', err);
+        return res.status(500).send({message: "Une erreur est survenue."});
     }
 }
 

@@ -434,10 +434,7 @@ router.route('/unlike-file')
 router.route('/:username/profile/:filename').get((req, res) => {
     const {username, filename} = req.params;
 
-    console.log(username, filename);
     const filePath = join(process.cwd(), 'users', sanitizeUsername(username), 'profile', filename);
-
-    console.log(filePath);
 
     access(filePath, constants.R_OK, (err) => {
         if (err) {
