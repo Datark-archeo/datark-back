@@ -23,6 +23,8 @@
     "form-data": "^4.0.0",
     "fs": "^0.0.1-security",
     "googleapis": "^133.0.0",
+    "i18next": "^24.1.0",
+    "i18next-fs-backend": "^2.6.0",
     "jsonwebtoken": "^9.0.2",
     "mailersend": "^2.3.0",
     "moment": "^2.29.4",

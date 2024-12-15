@@ -8,6 +8,8 @@ const fs = require('fs');
 const path = require('path');
 const sharp = require('sharp');
 const {post} = require("axios");
+const {t, changeLanguage} = require('i18next');
+const {getLanguageCodeFromCountryName} = require("../utils/formatCountryCode");
 
 const handleNewUser = async (req, res) => {
     const body = req.body.user;
@@ -180,22 +182,35 @@ const handleNewUser = async (req, res) => {
             await invitedCoAuthor.remove();
         }
 
+        const language = getLanguageCodeFromCountryName(body.country);
+        await changeLanguage(language);
 
-        const htmlContent = `<p>Bonjour ${body.firstname},</p>
-        <p>Veuillez cliquer sur le lien ci-dessous pour vérifier votre adresse email.</p>
-        <a href="${process.env.BACKEND_URL}/user/verify?token=${token}">Vérifier mon adresse email</a>
-        <p>Ce lien expirera dans 3 heures.</p>
-        <p>Cordialement,</p>
-        <p>L'équipe de Datark</p>`
+        const subject = t('email.register.subject');
+        const greeting = t('email.register.greeting', {firstname: body.firstname});
+        const intro = t('email.register.intro');
+        const linkCta = t('email.register.link_cta');
+        const expirationNotice = t('email.register.expiration_notice');
+        const footer = t('email.register.footer');
+        const teamSignature = t('email.register.team_signature');
 
-        sendEmail(htmlContent, "Vérification de votre adresse email", "Vérification de votre adresse email", body.email, body.firstname, body.lastname)
+        const htmlContent = `
+          <p>${greeting}</p>
+          <p>${intro}</p>
+          <a href="${process.env.BACKEND_URL}/user/verify?token=${token}">${linkCta}</a>
+          <p>${expirationNotice}</p>
+          <p>${footer}</p>
+          <p>${teamSignature}</p>
+        `;
+
+        sendEmail(htmlContent, subject, subject, body.email, body.firstname, body.lastname)
             .then(() => {
                 console.log("Email envoyé avec succès");
                 return res.status(200).send({message: "L'utilisateur a bien été créé."});
-            }).catch((error) => {
-            console.error(error);
-            return res.status(400).send({message: "Une erreur est survenue lors de l'envoi du mail."});
-        });
+            })
+            .catch((error) => {
+                console.error(error);
+                return res.status(400).send({message: "Une erreur est survenue lors de l'envoi du mail."});
+            });
 
     } catch (error) {
         console.log(error);

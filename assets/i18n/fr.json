@@ -1,0 +1,41 @@
+{
+  "email": {
+    "register": {
+      "subject": "Vérification de votre adresse email",
+      "greeting": "Bonjour {{firstname}},",
+      "intro": "Veuillez cliquer sur le lien ci-dessous pour vérifier votre adresse email.",
+      "link_cta": "Vérifier mon adresse email",
+      "expiration_notice": "Ce lien expirera dans 3 heures.",
+      "footer": "Cordialement,",
+      "team_signature": "L'équipe de Datark"
+    },
+    "coauthor_added": {
+      "subject": "Ajout en tant que co-auteur sur DatArk",
+      "greeting": "Bonjour {{firstname}},",
+      "intro_1": "Nous avons plaisir de vous informer que vous avez été ajouté(e) en tant que co-auteur de notre publication intitulée « {{publication_name}} » sur la plateforme DatArk.",
+      "intro_2": "Votre contribution précieuse a permis de renforcer la qualité de ce travail, et votre nom figure désormais officiellement parmi les co-auteurs. Vous pouvez accéder à la publication directement sur DatArk en vous connectant à votre compte.",
+      "thanks_note": "Merci encore pour votre implication et votre expertise dans ce projet.",
+      "help_reminder": "N'hésitez pas à revenir vers nous pour toute question complémentaire.",
+      "footer": "Bien cordialement,",
+      "team_signature": "L'équipe de Datark"
+    },
+    "invitation": {
+      "subject": "Invitation à rejoindre Datark",
+      "greeting": "Bonjour {{firstname}},",
+      "intro": "Vous avez été invité(e) à rejoindre Datark pour collaborer sur un fichier.",
+      "instructions": "Inscrivez-vous avec votre email : {{email}}, afin de créer votre profil.",
+      "cta": "S'inscrire",
+      "footer": "Cordialement,",
+      "team_signature": "L'équipe de Datark"
+    },
+    "reset_password": {
+      "subject": "Réinitialisation de votre mot de passe",
+      "greeting": "Bonjour {{firstname}},",
+      "intro": "Veuillez cliquer sur le lien ci-dessous pour réinitialiser votre mot de passe.",
+      "link_cta": "Réinitialiser mon mot de passe",
+      "expiration_notice": "Ce lien expirera dans 3 heures.",
+      "footer": "Cordialement,",
+      "team_signature": "L'équipe de Datark"
+    }
+  }
+}

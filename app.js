@@ -11,7 +11,13 @@ const mongoose = require('mongoose');
 const connectDB = require("./utils/dbConnection");
 const swaggerJsdoc = require('swagger-jsdoc');
 const swaggerUi = require('swagger-ui-express');
-const {join} = require("node:path");
+const {join, join} = require("node:path");
+
+// i18n initialization
+const i18next = require('i18next');
+const Backend = require('i18next-fs-backend');
+
+
 // Get port from environment and store in Express
 const PORT = process.env.PORT || '3500';
 app.set('port', PORT);
@@ -57,6 +63,24 @@ if (!process.env.ACCESS_TOKEN_SECRET) {
     throw new Error('MAILER_SEND_API_KEY is not defined');
 }
 
+// i18n configuration
+i18next
+    .use(Backend)
+    .init({
+        lng: 'en', // langue par défaut
+        fallbackLng: 'en',
+        backend: {
+            // Indiquez à i18next où trouver les fichiers de langues
+            loadPath: join(__dirname, '../assets/i18n/{{lng}}.json')
+        },
+        interpolation: {
+            escapeValue: false // Indispensable si vous utilisez des variables
+        }
+    }, (err, t) => {
+        if (err) return console.error(err);
+        console.log('i18next est initialisé.');
+    });
+
 const swaggerOptions = {
     definition: {
         openapi: '3.0.0',
@@ -86,11 +110,11 @@ app.use(prefix + '/contact', require('./routes/contact'));
 
 app.use(errorHandler);
 
-connectDB();
+app.connectDB();
 
 mongoose.connection.once('open', () => {
     console.log('MongoDB is Connected...');
     app.listen(app.get('port'), () => console.log(`Server running on port ${PORT}`));
 });
 
-module.exports = app;
+module.exports = {app, i18next};

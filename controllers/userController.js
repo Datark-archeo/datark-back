@@ -11,6 +11,8 @@ const fs = require('fs');
 const path = require('path');
 const {EmailParams, Recipient, Sender, MailerSend} = require("mailersend");
 const {sendEmail} = require('../utils/mailer');
+const {changeLanguage, t} = require("i18next");
+const {getLanguageCodeFromCountryName} = require("../utils/formatCountryCode");
 
 
 /**
@@ -516,24 +518,37 @@ function resetPassword(req, res) {
             expire_token.setHours(expire_token.getHours() + 3);  // Le token expire dans 1 heure
             user.verification_token = token;
             user.expire_token = expire_token;
-            user.save().then(() => {
+            user.save().then(async () => {
 
-                const htmlContent = `<p>Bonjour ${user.firstname},</p>
-                Veuillez cliquer sur le lien ci-dessous pour réinitialiser votre mot de passe.</p>
-                <a href="${process.env.FRONTEND_URL}/reset-password?token=${token}">Réinitialiser mon mot de passe</a>
-                <p>Ce lien expirera dans 3 heures.</p>
-                <p>Cordialement,</p>
-                <p>L'équipe de Datark</p>`;
+                const language = getLanguageCodeFromCountryName(user.country);
+                await changeLanguage(language);
 
-                sendEmail(htmlContent, "Réinitialisation de votre mot de passe", "Réinitialisation de votre mot de passe", user.email, user.firstname, user.lastname)
+                const subject = t('email.reset_password.subject');
+                const greeting = t('email.reset_password.greeting', {firstname: user.firstname});
+                const intro = t('email.reset_password.intro');
+                const linkCta = t('email.reset_password.link_cta');
+                const expirationNotice = t('email.reset_password.expiration_notice');
+                const footer = t('email.reset_password.footer');
+                const teamSignature = t('email.reset_password.team_signature');
+
+                const htmlContent = `
+                  <p>${greeting}</p>
+                  <p>${intro}</p>
+                  <a href="${process.env.FRONTEND_URL}/reset-password?token=${token}">${linkCta}</a>
+                  <p>${expirationNotice}</p>
+                  <p>${footer}</p>
+                  <p>${teamSignature}</p>
+                `;
+
+                sendEmail(htmlContent, subject, subject, user.email, user.firstname, user.lastname)
                     .then(response => {
-                        console.log("Email sent successfully:", response);
+                        console.log("Email envoyé avec succès:", response);
                         return res.status(200).send({message: "Un email de réinitialisation a été envoyé."});
                     })
                     .catch(error => {
-                        console.error("Error sending email:", error);
+                        console.error("Erreur lors de l'envoi de l'email:", error);
                         return res.status(400).send({message: "Une erreur est survenue lors de l'envoi du mail."});
-                    })
+                    });
 
             }).catch(() => {
                 return res.status(400).send({message: "Une erreur est survenue."});

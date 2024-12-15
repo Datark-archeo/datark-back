@@ -11,6 +11,8 @@ const {sendEmail} = require('../utils/mailer');
 const bcrypt = require("bcrypt");
 const axios = require('axios');
 const pdfParse = require('pdf-parse')
+const {t, changeLanguage} = require('i18next');
+const {getLanguageCodeFromCountryName} = require("../utils/formatCountryCode");
 
 /**
  * @swagger
@@ -85,21 +87,10 @@ async function upload(req, res) {
             return res.status(400).send({message: "Le fichier doit être au format PDF."});
         }
 
-        // **Amélioration : Stocker les fichiers sous le répertoire 'uploads'**
-        const dir = path.join(__dirname, '..', 'users', username, 'files');
+        const fileBuffer = fileData.data;
 
-        // Créer le répertoire s'il n'existe pas
-        await fs.promises.mkdir(dir, {recursive: true});
-
-        // Générer un nom de fichier unique pour éviter les conflits
-        const timestamp = Date.now();
+        const pdfBase64 = fileBuffer.toString('base64');
         const sanitizedFileName = fileData.name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_.-]/g, '');
-        const fileName = `${timestamp}_${sanitizedFileName}`;
-
-        const filePath = path.join(dir, fileName);
-
-        // Déplacer le fichier uploadé vers le chemin défini
-        await fileData.mv(filePath);
 
         // Parse les champs JSON
         pactolsLieux = JSON.parse(pactolsLieux);
@@ -125,11 +116,12 @@ async function upload(req, res) {
             name,
             description,
             date_publication: date_creation,
-            file_name: fileName,
+            file_name: sanitizedFileName,
             pactolsLieux: lieuxIdentifiers,
             pactolsSujets: sujetsIdentifiers,
             owner: user._id,
-            pdfText
+            pdfText: pdfText,
+            pdfBase64: pdfBase64
         });
 
         // Ajouter le fichier à la liste des fichiers de l'utilisateur
@@ -145,20 +137,36 @@ async function upload(req, res) {
                     coOwner.files.push(newFile._id);
                     await coOwner.save();
 
-                    const htmlContent = `<p>Bonjour ${coOwner.firstname},</p>
-                            <p>Nous avons plaisir de vous informer que vous avez été ajouté(e) en tant que co-auteur de notre publication intitulée « ${newFile.name} » sur la plateforme DatArk.</p>
-                            <p>Votre contribution précieuse a permis de renforcer la qualité de ce travail, et votre nom figure désormais officiellement parmi les co-auteurs. Vous pouvez accéder à la publication directement sur DatArk en vous connectant à votre compte.</p>
-                            <a>Merci encore pour votre implication et votre expertise dans ce projet.</a>
-                            <p>N'hésitez pas à revenir vers nous pour toute question complémentaire.</p>
-                            <p>Bien cordialement,</p>
-                            <p>L'équipe de Datark</p>`
+                    // Déterminez la langue de l'utilisateur
+                    const language = getLanguageCodeFromCountryName(coOwner.country);
+                    await changeLanguage(language);
 
-                    sendEmail(htmlContent, "Ajout en tant que co-auteur sur DatArk", "Ajout en tant que co-auteur sur DatArk", coOwner.email, coOwner.firstname, coOwner.lastname)
+                    const subject = t('email.coauthor_added.subject');
+                    const greeting = t('email.coauthor_added.greeting', {firstname: coOwner.firstname});
+                    const intro1 = t('email.coauthor_added.intro_1', {publication_name: newFile.name});
+                    const intro2 = t('email.coauthor_added.intro_2');
+                    const thanksNote = t('email.coauthor_added.thanks_note');
+                    const helpReminder = t('email.coauthor_added.help_reminder');
+                    const footer = t('email.coauthor_added.footer');
+                    const teamSignature = t('email.coauthor_added.team_signature');
+
+                    const htmlContent = `
+                      <p>${greeting}</p>
+                      <p>${intro1}</p>
+                      <p>${intro2}</p>
+                      <p>${thanksNote}</p>
+                      <p>${helpReminder}</p>
+                      <p>${footer}</p>
+                      <p>${teamSignature}</p>
+                    `;
+
+                    sendEmail(htmlContent, subject, subject, coOwner.email, coOwner.firstname, coOwner.lastname)
                         .then(() => {
                             console.log("Email envoyé avec succès");
-                        }).catch((error) => {
-                        console.error(error);
-                    });
+                        })
+                        .catch((error) => {
+                            console.error(error);
+                        });
                 }
             }
             await newFile.save();
@@ -177,19 +185,33 @@ async function upload(req, res) {
                     newFile.invitedCoAuthors.push(coAuthor._id);
                     await newFile.save();
 
-                    const htmlContent = `<p>Bonjour ${invitedCoAuthor.firstname},</p>
-                            <p>Vous avez été invité(e) à rejoindre Datark pour collaborer sur un fichier.</p>
-                            <p>Inscrivez-vous avec votre email : ${invitedCoAuthor.email}, afin de créer votre profil.</p>
-                            <a href="${process.env.FRONTEND_URL}/signup">S'inscrire</a>
-                            <p>Cordialement,</p>
-                            <p>L'équipe de Datark</p>`
+                    const language = getLanguageCodeFromCountryName(coAuthor.country);
+                    await changeLanguage(language);
 
-                    sendEmail(htmlContent, "Invitation à rejoindre Datark", "Invitation à rejoindre Datark", invitedCoAuthor.email, invitedCoAuthor.firstname, invitedCoAuthor.lastname)
+                    const subject = t('email.invitation.subject');
+                    const greeting = t('email.invitation.greeting', {firstname: invitedCoAuthor.firstname});
+                    const intro = t('email.invitation.intro');
+                    const instructions = t('email.invitation.instructions', {email: invitedCoAuthor.email});
+                    const cta = t('email.invitation.cta');
+                    const footer = t('email.invitation.footer');
+                    const teamSignature = t('email.invitation.team_signature');
+
+                    const htmlContent = `
+                      <p>${greeting}</p>
+                      <p>${intro}</p>
+                      <p>${instructions}</p>
+                      <a href="${process.env.FRONTEND_URL}/signup">${cta}</a>
+                      <p>${footer}</p>
+                      <p>${teamSignature}</p>
+                    `;
+
+                    sendEmail(htmlContent, subject, subject, invitedCoAuthor.email, invitedCoAuthor.firstname, invitedCoAuthor.lastname)
                         .then(() => {
                             console.log("Email envoyé avec succès");
-                        }).catch((error) => {
-                        console.error(error);
-                    });
+                        })
+                        .catch((error) => {
+                            console.error(error);
+                        });
                 }
             }
         }
@@ -229,7 +251,7 @@ async function upload(req, res) {
             };
             const copyleaksBody = {
                 base64: newPdfBase64,
-                filename: fileName,
+                filename: sanitizedFileName,
                 sandbox: true,
                 aiGeneratedText: true,
                 properties: {
@@ -362,19 +384,34 @@ async function edit(req, res) {
                         coAuthor.firstname = invitedCoAuthor.firstname;
                         coAuthor.lastname = invitedCoAuthor.lastname;
 
-                        const htmlContent = `<p>Bonjour ${coAuthor.firstname},</p>
-                            <p>Vous avez été invité(e) à rejoindre Datark pour collaborer sur un fichier.</p>
-                            <p>Inscrivez-vous avec votre email : ${coAuthor.email}, afin de créer votre profil.</p>
-                            <a href="${process.env.FRONTEND_URL}/signup">S'inscrire</a>
-                            <p>Cordialement,</p>
-                            <p>L'équipe de Datark</p>`
+                        const language = getLanguageCodeFromCountryName(coAuthor.country);
+                        await changeLanguage(language);
 
-                        sendEmail(htmlContent, "Invitation à rejoindre Datark", "Invitation à rejoindre Datark", invitedCoAuthor.email, invitedCoAuthor.firstname, invitedCoAuthor.lastname)
+                        const subject = t('email.invitation.subject');
+                        const greeting = t('email.invitation.greeting', {firstname: invitedCoAuthor.firstname});
+                        const intro = t('email.invitation.intro');
+                        const instructions = t('email.invitation.instructions', {email: invitedCoAuthor.email});
+                        const cta = t('email.invitation.cta');
+                        const footer = t('email.invitation.footer');
+                        const teamSignature = t('email.invitation.team_signature');
+
+                        const htmlContent = `
+                          <p>${greeting}</p>
+                          <p>${intro}</p>
+                          <p>${instructions}</p>
+                          <a href="${process.env.FRONTEND_URL}/signup">${cta}</a>
+                          <p>${footer}</p>
+                          <p>${teamSignature}</p>
+                        `;
+
+                        sendEmail(htmlContent, subject, subject, invitedCoAuthor.email, invitedCoAuthor.firstname, invitedCoAuthor.lastname)
                             .then(() => {
                                 console.log("Email envoyé avec succès");
-                            }).catch((error) => {
-                            console.error(error);
-                        });
+                            })
+                            .catch((error) => {
+                                console.error(error);
+                            });
+
                     }
                 }
             }
@@ -407,20 +444,35 @@ async function edit(req, res) {
                 coOwner.files.push(file._id);
                 file.coOwners.push(coOwner._id);
                 await coOwner.save();
-                const htmlContent = `<p>Bonjour ${coOwner.firstname},</p>
-                            <p>Nous avons plaisir de vous informer que vous avez été ajouté(e) en tant que co-auteur de notre publication intitulée « ${file.name} » sur la plateforme DatArk.</p>
-                            <p>Votre contribution précieuse a permis de renforcer la qualité de ce travail, et votre nom figure désormais officiellement parmi les co-auteurs. Vous pouvez accéder à la publication directement sur DatArk en vous connectant à votre compte.</p>
-                            <a>Merci encore pour votre implication et votre expertise dans ce projet.</a>
-                            <p>N'hésitez pas à revenir vers nous pour toute question complémentaire.</p>
-                            <p>Bien cordialement,</p>
-                            <p>L'équipe de Datark</p>`
 
-                sendEmail(htmlContent, "Ajout en tant que co-auteur sur DatArk", "Ajout en tant que co-auteur sur DatArk", invitedCoAuthor.email, invitedCoAuthor.firstname, invitedCoAuthor.lastname)
+                const language = getLanguageCodeFromCountryName(coOwner.country);
+                await changeLanguage(language);
+
+                const subject = t('email.invitation.subject');
+                const greeting = t('email.invitation.greeting', {firstname: invitedCoAuthor.firstname});
+                const intro = t('email.invitation.intro');
+                const instructions = t('email.invitation.instructions', {email: invitedCoAuthor.email});
+                const cta = t('email.invitation.cta');
+                const footer = t('email.invitation.footer');
+                const teamSignature = t('email.invitation.team_signature');
+
+                const htmlContent = `
+                  <p>${greeting}</p>
+                  <p>${intro}</p>
+                  <p>${instructions}</p>
+                  <a href="${process.env.FRONTEND_URL}/signup">${cta}</a>
+                  <p>${footer}</p>
+                  <p>${teamSignature}</p>
+                `;
+
+                sendEmail(htmlContent, subject, subject, invitedCoAuthor.email, invitedCoAuthor.firstname, invitedCoAuthor.lastname)
                     .then(() => {
                         console.log("Email envoyé avec succès");
-                    }).catch((error) => {
-                    console.error(error);
-                });
+                    })
+                    .catch((error) => {
+                        console.error(error);
+                    });
+
             }
         }
 
@@ -776,12 +828,10 @@ async function download(req, res) {
     const username = req.username;
     let isSubscriber = false;
 
-
     if (file === null) {
         return res.status(404).send({message: "Fichier non trouvé."});
     }
 
-    const filePath = path.join(__dirname, '../users/' + file.owner.username + `/files/${file.file_name}/${file.file_name}`);
     if (username) {
         const user = await User.findOne({username: username}).exec();
         if (!user) {
@@ -790,38 +840,38 @@ async function download(req, res) {
         user.downloadedFiles.push(file._id);
         await user.save();
         isSubscriber = user.subscription !== null;
-
     }
 
-    // Vérification de l'existence du fichier
-    fs.access(filePath, fs.constants.R_OK, (err) => {
-        if (err) {
-            return res.status(404).send({message: "Fichier non trouvé ou accès refusé."});
-        }
+    try {
+        // Décoder le PDF à partir du base64
+        const pdfBuffer = Buffer.from(file.pdfBase64, 'base64');
+
+        // Configurer le nom du fichier
+        const year = file.date_publication.getFullYear();
+        const fileName = `${file.owner.name}_${year}.pdf`;
+
+        // Définir le taux de limitation (throttling)
+        const throttleRate = isSubscriber ? 1024 * 1024 * 10 : 1024 * 100;
+
+        res.set('Content-disposition', 'attachment; filename=' + fileName);
+        res.set('Content-Type', 'application/pdf');
+
+        const stream = new Readable();
+        stream.push(pdfBuffer);
+        stream.push(null); // Indiquer la fin du stream
+
+        const throttle = new Throttle(throttleRate);
+
+        stream.pipe(throttle).pipe(res);
+
+        // Enregistrer la date de téléchargement
         file.download.push(new Date());
-        file.save().then(() => {
-            const year = file.date_publication.getFullYear();
-            const fileName = `${file.owner.name}_${year}.pdf`
-            const throttleRate = isSubscriber ? 1024 * 1024 * 10 : 1024 * 100;
+        await file.save();
 
-            const fileStream = fs.createReadStream(filePath);
-            res.set('Content-disposition', 'attachment; filename=' + fileName);
-            res.set('Content-Type', 'application/pdf');
-
-            const throttle = new Throttle(throttleRate);
-
-            fileStream.on('error', (streamErr) => {
-                console.error(streamErr);
-                res.status(500).send({message: "Erreur lors de la lecture du fichier."});
-            });
-
-            fileStream.pipe(throttle).pipe(res);
-        }).catch((err) => {
-            console.error(err);
-            res.status(500).send({message: "Erreur lors de la mise à jour du fichier."});
-        });
-
-    });
+    } catch (err) {
+        console.error(err);
+        res.status(500).send({message: "Erreur lors du téléchargement du fichier."});
+    }
 }
 
 async function deleteFile(req, res) {
@@ -890,7 +940,7 @@ function resendMail(req, res) {
     if (!fileId) {
         return res.status(400).send({message: "Veuillez fournir un identifiant de fichier."});
     }
-    FileModel.findById(fileId).exec().then((file) => {
+    FileModel.findById(fileId).exec().then(async (file) => {
         if (!file) {
             return res.status(404).send({message: "Fichier non trouvé."});
         }
@@ -898,19 +948,32 @@ function resendMail(req, res) {
         for (const invitedCoAuthor of invitedCoAuthors) {
             let coAuthor = InvitedCoAuthor.findById(invitedCoAuthor);
             if (coAuthor) {
-                const htmlContent = `<p>Bonjour ${invitedCoAuthor.firstname},</p>
-                            <p>Vous avez été invité(e) à rejoindre Datark pour collaborer sur un fichier.</p>
-                            <p>Inscrivez-vous avec votre email : ${invitedCoAuthor.email}, afin de créer votre profil.</p>
-                            <a href="${process.env.FRONTEND_URL}/signup">S'inscrire</a>
-                            <p>Cordialement,</p>
-                            <p>L'équipe de Datark</p>`
+                await changeLanguage('fr');
 
-                sendEmail(htmlContent, "Invitation à rejoindre Datark", "Invitation à rejoindre Datark", invitedCoAuthor.email, invitedCoAuthor.firstname, invitedCoAuthor.lastname)
+                const subject = t('email.invitation.subject');
+                const greeting = t('email.invitation.greeting', {firstname: invitedCoAuthor.firstname});
+                const intro = t('email.invitation.intro');
+                const instructions = t('email.invitation.instructions', {email: invitedCoAuthor.email});
+                const cta = t('email.invitation.cta');
+                const footer = t('email.invitation.footer');
+                const teamSignature = t('email.invitation.team_signature');
+
+                const htmlContent = `
+                  <p>${greeting}</p>
+                  <p>${intro}</p>
+                  <p>${instructions}</p>
+                  <a href="${process.env.FRONTEND_URL}/signup">${cta}</a>
+                  <p>${footer}</p>
+                  <p>${teamSignature}</p>
+                `;
+
+                sendEmail(htmlContent, subject, subject, invitedCoAuthor.email, invitedCoAuthor.firstname, invitedCoAuthor.lastname)
                     .then(() => {
                         console.log("Email envoyé avec succès");
-                    }).catch((error) => {
-                    console.error(error);
-                });
+                    })
+                    .catch((error) => {
+                        console.error(error);
+                    });
             }
         }
         return res.status(200).send({message: "Emails envoyés avec succès."});

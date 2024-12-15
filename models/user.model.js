@@ -3,15 +3,12 @@ const mongoose = require('mongoose');
 const UserSchema = new mongoose.Schema({
     firstname: {
         type: String,
-        required: true
     },
     lastname: {
         type: String,
-        required: true
     },
     username: {
         type: String,
-        required: true,
         unique: true
     },
     email: {
@@ -35,8 +32,7 @@ const UserSchema = new mongoose.Schema({
     },
     birthday: {
         type: Date,
-        default: () => Date.now() + 7*24*60*60*1000,
-        required: true
+        default: () => Date.now() + 7 * 24 * 60 * 60 * 1000,
     },
     email_verified: {
         type: Boolean,
@@ -58,6 +54,7 @@ const UserSchema = new mongoose.Schema({
             default: 2001
         },
         Admin: Number,
+        Organization: Number,
     },
     files: [{
         type: mongoose.Schema.Types.ObjectId,
@@ -98,13 +95,17 @@ const UserSchema = new mongoose.Schema({
         type: String,
         default: null
     },
-    affiliateUniv:{
+    affiliateUniv: {
         type: String,
         default: null
     },
     history: [{
         type: String,
     }],
+    organizationName: {
+        type: String,
+        default: null
+    },
 }, {
     timestamps: true,  // Ajoute les champs createdAt et updatedAt
 });
